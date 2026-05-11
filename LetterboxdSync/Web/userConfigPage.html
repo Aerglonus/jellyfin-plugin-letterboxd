@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Letterboxd Settings</title>
+</head>
+<body>
+    <div id="letterboxdUserConfigPage" data-role="page" class="page type-interior pluginConfigurationPage"
+        data-require="emby-input,emby-button,emby-checkbox">
+        <div data-role="content">
+            <div class="content-primary">
+                <style>
+                    .lb-settings-container {
+                        max-width: 600px;
+                        margin: 0 auto;
+                        background: rgba(255, 255, 255, 0.04);
+                        padding: 2em;
+                        border-radius: 8px;
+                        border: 1px solid rgba(255, 255, 255, 0.06);
+                    }
+
+                    .lb-settings-container h2 {
+                        margin-top: 0;
+                        color: #00e054;
+                    }
+
+                    .lb-field {
+                        display: block;
+                        opacity: 0.8;
+                        font-size: 0.9em;
+                        margin-bottom: 0.4em;
+                    }
+
+                    .lb-input {
+                        width: 100%;
+                        padding: 0.6em;
+                        margin-bottom: 1.5em;
+                        background: rgba(255, 255, 255, 0.06);
+                        color: inherit;
+                        border: 1px solid rgba(255, 255, 255, 0.1);
+                        border-radius: 4px;
+                        box-sizing: border-box;
+                    }
+
+                    .lb-checkbox {
+                        display: flex;
+                        align-items: center;
+                        gap: 0.5em;
+                        margin-bottom: 1em;
+                        cursor: pointer;
+                    }
+
+                    .lb-btn {
+                        border: none;
+                        padding: 0.7em 1.5em;
+                        border-radius: 4px;
+                        cursor: pointer;
+                        font-weight: bold;
+                        font-size: 1em;
+                        transition: opacity 0.2s;
+                    }
+
+                    .lb-btn:hover {
+                        opacity: 0.85;
+                    }
+
+                    .lb-btn-primary {
+                        background: #00e054;
+                        color: #000;
+                    }
+
+                    .lb-btn-secondary {
+                        background: rgba(255, 255, 255, 0.08);
+                        color: inherit;
+                        border: 1px solid rgba(255, 255, 255, 0.1);
+                    }
+
+                    .lb-btn-danger {
+                        background: none;
+                        color: #e74c3c;
+                        border: 1px solid #e74c3c;
+                    }
+
+                    .lb-status {
+                        margin-top: 1em;
+                        font-weight: bold;
+                    }
+
+                    .c-green { color: #00e054; }
+                    .c-red { color: #e74c3c; }
+                    .c-muted { opacity: 0.5; font-size: 0.9em; }
+                </style>
+
+                <div class="lb-settings-container">
+                    <h2>Letterboxd Connection</h2>
+                    <p class="c-muted" style="margin-bottom: 2em;">Connect your Letterboxd account to automatically sync your watched movies from Jellyfin.</p>
+
+                    <div id="loadingIndicator">Loading settings...</div>
+
+                    <div id="settingsForm" style="display: none;">
+                        <label class="lb-field">Letterboxd Username</label>
+                        <input type="text" id="lbUsername" class="lb-input" />
+
+                        <label class="lb-field">Letterboxd Password</label>
+                        <input type="password" id="lbPassword" class="lb-input" />
+                        <p class="c-muted" id="passwordHint" style="display: none; margin-top: -1em; margin-bottom: 1.5em;">Leave blank to keep existing password.</p>
+
+                        <div style="border-top: 1px solid rgba(255,255,255,0.1); margin: 2em 0; padding-top: 1.5em;">
+                            <label class="lb-checkbox">
+                                <input type="checkbox" id="lbEnabled" /> Enable Synchronization
+                            </label>
+
+                            <label class="lb-checkbox">
+                                <input type="checkbox" id="lbSyncFavorites" /> Sync favorites as liked
+                            </label>
+
+                            <label class="lb-checkbox">
+                                <input type="checkbox" id="lbWatchlistSync" /> Sync Watchlist to Jellyfin Playlist
+                            </label>
+
+                            <label class="lb-checkbox">
+                                <input type="checkbox" id="lbDiaryImport" /> Import Diary as Played in Jellyfin
+                            </label>
+
+                            <label class="lb-checkbox">
+                                <input type="checkbox" id="lbEnableDateFilter" /> Only sync recently played
+                            </label>
+
+                            <div id="dateFilterContainer" style="display: none; margin-left: 1.5em; margin-bottom: 1em;">
+                                <label class="lb-field" style="display: inline;">Days to look back: </label>
+                                <input type="number" id="lbDateFilterDays" min="1" max="365" value="7" style="width: 80px; padding: 0.2em; background: rgba(255,255,255,0.06); color: inherit; border: 1px solid rgba(255,255,255,0.1);" />
+                            </div>
+                        </div>
+
+                        <div style="display: flex; gap: 1em; align-items: center; margin-top: 2em;">
+                            <button type="button" class="lb-btn lb-btn-primary" id="saveBtn">Save Settings</button>
+                            <button type="button" class="lb-btn lb-btn-secondary" id="testBtn">Test Connection</button>
+                            <div style="flex-grow: 1;"></div>
+                            <button type="button" class="lb-btn lb-btn-danger" id="disconnectBtn" style="display: none;">Disconnect Account</button>
+                        </div>
+
+                        <div id="statusMessage" class="lb-status"></div>
+                    </div>
+                </div>
+
+                <script type="text/javascript">
+                    var UserSettings = {
+                        hasExistingConfig: false,
+
+                        init: function () {
+                            var self = this;
+                            
+                            document.getElementById('lbEnableDateFilter').addEventListener('change', function () {
+                                document.getElementById('dateFilterContainer').style.display = this.checked ? 'block' : 'none';
+                            });
+
+                            document.getElementById('saveBtn').addEventListener('click', function () { self.save(); });
+                            document.getElementById('testBtn').addEventListener('click', function () { self.testConnection(); });
+                            document.getElementById('disconnectBtn').addEventListener('click', function () {
+                                if (confirm('Are you sure you want to disconnect your Letterboxd account?')) {
+                                    self.disconnect();
+                                }
+                            });
+
+                            self.load();
+                        },
+
+                        setStatus: function(msg, isError) {
+                            var el = document.getElementById('statusMessage');
+                            el.textContent = msg;
+                            el.className = 'lb-status ' + (isError ? 'c-red' : 'c-green');
+                            setTimeout(function() { el.textContent = ''; }, 5000);
+                        },
+
+                        load: function () {
+                            var self = this;
+                            ApiClient.getJSON(ApiClient.getUrl('Jellyfin.Plugin.LetterboxdSync/UserConfig'))
+                                .then(function (config) {
+                                    self.hasExistingConfig = true;
+                                    document.getElementById('lbUsername').value = config.letterboxdUsername || '';
+                                    
+                                    if (config.hasPassword) {
+                                        document.getElementById('passwordHint').style.display = 'block';
+                                        document.getElementById('lbPassword').placeholder = '(encrypted)';
+                                    }
+                                    
+                                    document.getElementById('lbEnabled').checked = config.enabled;
+                                    document.getElementById('lbSyncFavorites').checked = config.syncFavorites;
+                                    document.getElementById('lbWatchlistSync').checked = config.enableWatchlistSync;
+                                    document.getElementById('lbDiaryImport').checked = config.enableDiaryImport;
+                                    document.getElementById('lbEnableDateFilter').checked = config.enableDateFilter;
+                                    document.getElementById('lbDateFilterDays').value = config.dateFilterDays || 7;
+                                    
+                                    if (config.enableDateFilter) {
+                                        document.getElementById('dateFilterContainer').style.display = 'block';
+                                    }
+                                    
+                                    document.getElementById('disconnectBtn').style.display = 'block';
+                                    
+                                    self.showForm();
+                                })
+                                .catch(function (err) {
+                                    // 404 means no config yet, that's fine
+                                    self.hasExistingConfig = false;
+                                    document.getElementById('lbEnabled').checked = true; // Default to true for new setups
+                                    self.showForm();
+                                });
+                        },
+
+                        showForm: function() {
+                            document.getElementById('loadingIndicator').style.display = 'none';
+                            document.getElementById('settingsForm').style.display = 'block';
+                        },
+
+                        collectData: function() {
+                            return {
+                                LetterboxdUsername: document.getElementById('lbUsername').value.trim(),
+                                LetterboxdPassword: document.getElementById('lbPassword').value || null,
+                                Enabled: document.getElementById('lbEnabled').checked,
+                                SyncFavorites: document.getElementById('lbSyncFavorites').checked,
+                                EnableWatchlistSync: document.getElementById('lbWatchlistSync').checked,
+                                EnableDiaryImport: document.getElementById('lbDiaryImport').checked,
+                                EnableDateFilter: document.getElementById('lbEnableDateFilter').checked,
+                                DateFilterDays: parseInt(document.getElementById('lbDateFilterDays').value, 10) || 7
+                            };
+                        },
+
+                        save: function () {
+                            var self = this;
+                            var data = self.collectData();
+                            
+                            if (!data.LetterboxdUsername) {
+                                self.setStatus('Username is required.', true);
+                                return;
+                            }
+
+                            if (!self.hasExistingConfig && !data.LetterboxdPassword) {
+                                self.setStatus('Password is required for new setups.', true);
+                                return;
+                            }
+
+                            var btn = document.getElementById('saveBtn');
+                            btn.disabled = true;
+                            btn.textContent = 'Saving...';
+
+                            ApiClient.ajax({
+                                url: ApiClient.getUrl('Jellyfin.Plugin.LetterboxdSync/UserConfig'),
+                                type: 'POST',
+                                contentType: 'application/json',
+                                data: JSON.stringify(data)
+                            }).then(function () {
+                                btn.disabled = false;
+                                btn.textContent = 'Save Settings';
+                                self.setStatus('Settings saved successfully.', false);
+                                self.hasExistingConfig = true;
+                                document.getElementById('disconnectBtn').style.display = 'block';
+                                document.getElementById('lbPassword').value = '';
+                                document.getElementById('passwordHint').style.display = 'block';
+                                document.getElementById('lbPassword').placeholder = '(encrypted)';
+                            }).catch(async function (err) {
+                                btn.disabled = false;
+                                btn.textContent = 'Save Settings';
+                                
+                                var msg = 'Failed to save settings.';
+                                try {
+                                    if (err && typeof err.json === 'function') {
+                                        var eData = await err.json();
+                                        if (eData && eData.error) msg = eData.error;
+                                    }
+                                } catch(e) {}
+                                
+                                self.setStatus(msg, true);
+                            });
+                        },
+
+                        testConnection: function() {
+                            var self = this;
+                            var data = {
+                                LetterboxdUsername: document.getElementById('lbUsername').value.trim(),
+                                LetterboxdPassword: document.getElementById('lbPassword').value || null
+                            };
+
+                            if (!data.LetterboxdUsername) {
+                                self.setStatus('Username is required.', true);
+                                return;
+                            }
+
+                            var btn = document.getElementById('testBtn');
+                            btn.disabled = true;
+                            btn.textContent = 'Testing...';
+
+                            ApiClient.ajax({
+                                url: ApiClient.getUrl('Jellyfin.Plugin.LetterboxdSync/TestConnection'),
+                                type: 'POST',
+                                contentType: 'application/json',
+                                data: JSON.stringify(data)
+                            }).then(function (res) {
+                                btn.disabled = false;
+                                btn.textContent = 'Test Connection';
+                                self.setStatus('Connection successful!', false);
+                            }).catch(async function (err) {
+                                btn.disabled = false;
+                                btn.textContent = 'Test Connection';
+                                
+                                var msg = 'Connection failed.';
+                                try {
+                                    if (err && typeof err.json === 'function') {
+                                        var eData = await err.json();
+                                        if (eData && eData.error) msg = eData.error;
+                                    }
+                                } catch(e) {}
+                                
+                                self.setStatus(msg, true);
+                            });
+                        },
+
+                        disconnect: function() {
+                            var self = this;
+                            ApiClient.ajax({
+                                url: ApiClient.getUrl('Jellyfin.Plugin.LetterboxdSync/UserConfig'),
+                                type: 'DELETE'
+                            }).then(function () {
+                                document.getElementById('lbUsername').value = '';
+                                document.getElementById('lbPassword').value = '';
+                                document.getElementById('lbPassword').placeholder = '';
+                                document.getElementById('passwordHint').style.display = 'none';
+                                document.getElementById('disconnectBtn').style.display = 'none';
+                                self.hasExistingConfig = false;
+                                self.setStatus('Account disconnected.', false);
+                            }).catch(function () {
+                                self.setStatus('Failed to disconnect account.', true);
+                            });
+                        }
+                    };
+
+                    UserSettings.init();
+                </script>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

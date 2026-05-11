@@ -1,0 +1,11 @@
+[
+  {
+    "guid": "00f8df7c-b110-4529-8e8c-7675905cfd0f",
+    "name": "LetterboxdSync",
+    "overview": "Real-time Letterboxd diary sync.",
+    "description": "Automatically syncs your Jellyfin watch history to your Letterboxd diary. Real-time sync on playback completion, duplicate detection and TMDb-based film matching.",
+    "owner": "lonus",
+    "category": "General",
+    "versions": []
+  }
+]

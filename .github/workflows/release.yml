@@ -1,0 +1,74 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build -c Release -p:LetterboxdClientId="${{ secrets.LETTERBOXD_CLIENT_ID }}" -p:LetterboxdClientSecret="${{ secrets.LETTERBOXD_CLIENT_SECRET }}" --no-restore
+
+      - name: Test
+        run: dotnet test -c Release --no-build --verbosity normal
+
+      - name: Package
+        run: |
+          cd LetterboxdSync/bin/Release/net9.0
+          zip -j /tmp/jellyfin-plugin-letterboxd-${{ github.ref_name }}.zip LetterboxdSync.dll
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: /tmp/jellyfin-plugin-letterboxd-${{ github.ref_name }}.zip
+          generate_release_notes: true
+
+      - name: Update manifest
+        run: |
+          CHECKSUM=$(md5sum /tmp/jellyfin-plugin-letterboxd-${{ github.ref_name }}.zip | awk '{print $1}')
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"
+          TARGET_ABI="10.11.0.0"
+          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          SOURCE_URL="https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/jellyfin-plugin-letterboxd-${{ github.ref_name }}.zip"
+
+          # Use jq to prepend the new version, or just update checksum if it already exists
+          jq --arg ver "${VERSION}.0" \
+             --arg cs "$CHECKSUM" \
+             --arg url "$SOURCE_URL" \
+             --arg ts "$TIMESTAMP" \
+             --arg abi "$TARGET_ABI" \
+             --arg cl "See GitHub release notes for details." \
+            '.[0].versions |= (
+               if any(.version == $ver) then
+                 map(if .version == $ver then .checksum = $cs else . end)
+               else
+                 [{version: $ver, changelog: $cl, targetAbi: $abi, sourceUrl: $url, checksum: $cs, timestamp: $ts}] + .
+               end
+             )' \
+            manifest.json > manifest.tmp && mv manifest.tmp manifest.json
+
+      - name: Commit manifest update
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add manifest.json
+          git diff --cached --quiet && exit 0
+          git commit -m "Update manifest for ${{ github.ref_name }}"
+          git push origin HEAD:main

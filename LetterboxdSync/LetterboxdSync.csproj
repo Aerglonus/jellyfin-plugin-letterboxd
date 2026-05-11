@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="local.props" Condition="Exists('local.props')" />
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <RootNamespace>LetterboxdSync</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <AssemblyVersion>1.4.0.0</AssemblyVersion>
+    <FileVersion>1.4.0.0</FileVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="LetterboxdSync.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Jellyfin.Controller" Version="10.11.0" />
+    <PackageReference Include="Jellyfin.Model" Version="10.11.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Web\configPage.html" />
+    <EmbeddedResource Include="Web\configPage.js" />
+    <EmbeddedResource Include="Web\statsPage.html" />
+    <EmbeddedResource Include="Web\userConfigPage.html" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AssemblyMetadata Include="LetterboxdClientId" Value="$(LetterboxdClientId)" Condition="'$(LetterboxdClientId)' != ''" />
+    <AssemblyMetadata Include="LetterboxdClientSecret" Value="$(LetterboxdClientSecret)" Condition="'$(LetterboxdClientSecret)' != ''" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,231 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Jellyfin.Data.Enums;
+using LetterboxdSync.Configuration;
+using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Library;
+using MediaBrowser.Model.Entities;
+using MediaBrowser.Model.Tasks;
+using Microsoft.Extensions.Logging;
+
+namespace LetterboxdSync;
+
+public class SyncTask : IScheduledTask
+{
+    private readonly ILogger<SyncTask> _logger;
+    private readonly ILibraryManager _libraryManager;
+    private readonly IUserManager _userManager;
+    private readonly IUserDataManager _userDataManager;
+
+    public SyncTask(
+        IUserManager userManager,
+        ILoggerFactory loggerFactory,
+        ILibraryManager libraryManager,
+        IUserDataManager userDataManager)
+    {
+        _logger = loggerFactory.CreateLogger<SyncTask>();
+        _userManager = userManager;
+        _libraryManager = libraryManager;
+        _userDataManager = userDataManager;
+    }
+
+    private static PluginConfiguration Config => Plugin.Instance!.Configuration;
+
+    public string Name => "Sync watched movies to Letterboxd";
+    public string Key => "LetterboxdSync";
+    public string Description => "Syncs your Jellyfin watch history to your Letterboxd diary";
+    public string Category => "Letterboxd";
+
+    public async Task ExecuteAsync(IProgress<double> progress, CancellationToken cancellationToken)
+    {
+        var users = _userManager.Users.ToList();
+        var processedUsers = 0;
+
+        foreach (var user in users)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var account = Config.Accounts.FirstOrDefault(
+                a => a.Enabled && a.UserJellyfinId == user.Id.ToString("N"));
+
+            if (account == null)
+                continue;
+
+            _logger.LogInformation("Starting Letterboxd sync for {Username}", user.Username);
+
+            List<MediaBrowser.Controller.Entities.BaseItem> movies = _libraryManager.GetItemList(new InternalItemsQuery(user)
+            {
+                IncludeItemTypes = new[] { BaseItemKind.Movie },
+                IsVirtualItem = false,
+                IsPlayed = true,
+                OrderBy = new[] { (ItemSortBy.SortName, Jellyfin.Database.Implementations.Enums.SortOrder.Ascending) }
+            }).ToList();
+
+            if (movies.Count == 0)
+                continue;
+
+            // Apply date filter if enabled
+            if (account.EnableDateFilter)
+            {
+                var cutoff = DateTime.UtcNow.AddDays(-account.DateFilterDays);
+                movies = movies.Where(m =>
+                {
+                    var ud = _userDataManager.GetUserData(user, m);
+                    return ud?.LastPlayedDate.HasValue == true && ud.LastPlayedDate!.Value >= cutoff;
+                }).ToList();
+            }
+
+            if (movies.Count == 0)
+                continue;
+
+            using var client = await SyncHelpers.CreateAuthenticatedClientAsync(account, user.Username, _logger).ConfigureAwait(false);
+            if (client == null)
+                continue;
+
+            var synced = 0;
+            var skipped = 0;
+            var failed = 0;
+
+            HashSet<int> diaryTmdbIds = new();
+            try
+            {
+                _logger.LogInformation("Fetching entire Letterboxd diary for {Username} to prevent duplicates...", user.Username);
+                var diaryList = await client.GetDiaryTmdbIdsAsync(user.Username).ConfigureAwait(false);
+                diaryTmdbIds = new HashSet<int>(diaryList);
+                _logger.LogInformation("Found {Count} movies in Letterboxd diary for {Username}", diaryTmdbIds.Count, user.Username);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning("Failed to fetch Letterboxd diary for {Username}: {Message}. Falling back to individual checks.", user.Username, ex.Message);
+            }
+
+            foreach (var movie in movies)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var tmdbIdStr = movie.GetProviderId(MetadataProvider.Tmdb);
+                if (!int.TryParse(tmdbIdStr, out var tmdbId))
+                {
+                    _logger.LogWarning("{Title} has no TMDb ID, skipping", movie.Name);
+                    skipped++;
+                    continue;
+                }
+
+                // Initial fast-skip using bulk diary data
+                if (diaryTmdbIds.Contains(tmdbId))
+                {
+                    _logger.LogInformation("{Title} (TMDb:{TmdbId}) already in Letterboxd diary, skipping", movie.Name, tmdbId);
+
+                    var userData = _userDataManager.GetUserData(user, movie);
+                    var viewingDate = userData?.LastPlayedDate?.Date ?? DateTime.Now.Date;
+
+                    SyncHistory.Record(new SyncEvent
+                    {
+                        FilmTitle = movie.Name, TmdbId = tmdbId,
+                        Username = user.Username, Timestamp = DateTime.UtcNow,
+                        ViewingDate = viewingDate, Status = SyncStatus.Skipped, Source = "scheduled"
+                    });
+                    skipped++;
+                    continue;
+                }
+
+                FilmResult? film = null;
+                try
+                {
+                    film = await client.LookupFilmByTmdbIdAsync(tmdbId).ConfigureAwait(false);
+                    await Task.Delay(3000 + Random.Shared.Next(2000), cancellationToken).ConfigureAwait(false);
+
+                    var userData = _userDataManager.GetUserData(user, movie);
+                    var viewingDate = userData?.LastPlayedDate?.Date ?? DateTime.Now.Date;
+
+                    // Check diary for duplicates
+                    var diary = await client.GetDiaryInfoAsync(film.FilmId).ConfigureAwait(false);
+                    if (diary.IsWatched || diary.HasAnyEntry || (diary.LastDate != null && diary.LastDate.Value.Date == viewingDate))
+                    {
+                        _logger.LogDebug("{Title} ({FilmId}) already logged or watched, skipping", movie.Name, film.FilmId);
+
+                        await SyncHelpers.SyncFavoritesAsync(client, account, film.FilmId, userData?.IsFavorite ?? false, movie.Name, _logger).ConfigureAwait(false);
+
+                        SyncHistory.Record(new SyncEvent
+                        {
+                            FilmTitle = movie.Name, FilmSlug = film.Slug, TmdbId = tmdbId,
+                            Username = user.Username, Timestamp = DateTime.UtcNow,
+                            ViewingDate = viewingDate, Status = SyncStatus.Skipped, Source = "scheduled"
+                        });
+                        skipped++;
+                        continue;
+                    }
+
+                    // Scheduled sync never marks as rewatch — it's for catching up, not real playback.
+                    // Only the real-time PlaybackHandler marks rewatches.
+                    bool isRewatch = false;
+                    bool liked = account.SyncFavorites && (userData?.IsFavorite ?? false);
+
+                    // Map Jellyfin rating (0-10) to Letterboxd (0.5-5.0 in 0.5 steps)
+                    double? lbRating = SyncHelpers.GetLetterboxdRating(userData?.Rating);
+
+                    await client.MarkAsWatchedAsync(film.Slug, film.FilmId, userData?.LastPlayedDate, liked,
+                        film.ProductionId, isRewatch, lbRating).ConfigureAwait(false);
+
+                    await SyncHelpers.SyncFavoritesAsync(client, account, film.FilmId, userData?.IsFavorite ?? false, movie.Name, _logger).ConfigureAwait(false);
+
+                    var logMsg = isRewatch ? "Logged rewatch of" : "Logged";
+                    _logger.LogInformation("{Action} {Title} (TMDb:{TmdbId}) to Letterboxd for {Username} on {Date}",
+                        logMsg, movie.Name, tmdbId, user.Username,
+                        viewingDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+                    SyncHistory.Record(new SyncEvent
+                    {
+                        FilmTitle = movie.Name, FilmSlug = film.Slug, TmdbId = tmdbId,
+                        Username = user.Username, Timestamp = DateTime.UtcNow,
+                        ViewingDate = viewingDate,
+                        Status = isRewatch ? SyncStatus.Rewatch : SyncStatus.Success,
+                        Source = "scheduled"
+                    });
+                    synced++;
+                }
+                catch (Exception ex)
+                {
+                    if (film != null)
+                    {
+                        _logger.LogError("Failed to sync {Title} (TMDb:{TmdbId}, FilmId:{FilmId}) for {Username}: {Message}",
+                            movie.Name, tmdbId, film.FilmId, user.Username, ex.Message);
+                    }
+                    else
+                    {
+                        _logger.LogError("Failed to sync {Title} (TMDb:{TmdbId}) for {Username}: {Message}",
+                            movie.Name, tmdbId, user.Username, ex.Message);
+                    }
+
+                    SyncHistory.Record(new SyncEvent
+                    {
+                        FilmTitle = movie.Name, TmdbId = tmdbId,
+                        Username = user.Username, Timestamp = DateTime.UtcNow,
+                        Status = SyncStatus.Failed, Error = ex.Message, Source = "scheduled"
+                    });
+                    failed++;
+                }
+            }
+
+            _logger.LogInformation("Letterboxd sync complete for {Username}: {Synced} synced, {Skipped} skipped, {Failed} failed",
+                user.Username, synced, skipped, failed);
+
+            processedUsers++;
+            progress.Report((double)processedUsers / users.Count * 100);
+        }
+
+        progress.Report(100);
+    }
+
+    public IEnumerable<TaskTriggerInfo> GetDefaultTriggers() => new[]
+    {
+        new TaskTriggerInfo
+        {
+            Type = TaskTriggerInfoType.IntervalTrigger,
+            IntervalTicks = TimeSpan.FromDays(1).Ticks
+        }
+    };
+}
