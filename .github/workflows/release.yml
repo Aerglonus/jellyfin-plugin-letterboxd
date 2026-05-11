@@ -67,7 +67,7 @@ jobs:
           SOURCE_URL="https://github.com/${{ github.repository }}/releases/download/${{ env.REF_NAME }}/jellyfin-plugin-letterboxd-${{ env.REF_NAME }}.zip"
 
           # Use jq to prepend the new version, or just update checksum if it already exists
-          jq --arg ver "${VERSION}.0" \
+          jq --arg ver "${VERSION}" \
              --arg cs "$CHECKSUM" \
              --arg url "$SOURCE_URL" \
              --arg ts "$TIMESTAMP" \
