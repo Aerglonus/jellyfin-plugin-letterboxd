@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., v1.4.1)'
+        required: true
+        type: string
 
 jobs:
   release:
@@ -28,25 +34,37 @@ jobs:
       - name: Test
         run: dotnet test -c Release --no-build --verbosity normal
 
+      - name: Set target version
+        id: vars
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "REF_NAME=${{ github.event.inputs.version }}" >> $GITHUB_ENV
+            echo "TAG_NAME=${{ github.event.inputs.version }}" >> $GITHUB_ENV
+          else
+            echo "REF_NAME=${{ github.ref_name }}" >> $GITHUB_ENV
+            echo "TAG_NAME=${{ github.ref_name }}" >> $GITHUB_ENV
+          fi
+
       - name: Package
         run: |
           cd LetterboxdSync/bin/Release/net9.0
-          zip -j /tmp/jellyfin-plugin-letterboxd-${{ github.ref_name }}.zip LetterboxdSync.dll
+          zip -j /tmp/jellyfin-plugin-letterboxd-${{ env.REF_NAME }}.zip LetterboxdSync.dll
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: /tmp/jellyfin-plugin-letterboxd-${{ github.ref_name }}.zip
+          files: /tmp/jellyfin-plugin-letterboxd-${{ env.REF_NAME }}.zip
+          tag_name: ${{ env.TAG_NAME }}
           generate_release_notes: true
 
       - name: Update manifest
         run: |
-          CHECKSUM=$(md5sum /tmp/jellyfin-plugin-letterboxd-${{ github.ref_name }}.zip | awk '{print $1}')
-          VERSION="${{ github.ref_name }}"
+          CHECKSUM=$(md5sum /tmp/jellyfin-plugin-letterboxd-${{ env.REF_NAME }}.zip | awk '{print $1}')
+          VERSION="${{ env.REF_NAME }}"
           VERSION="${VERSION#v}"
           TARGET_ABI="10.11.0.0"
           TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-          SOURCE_URL="https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/jellyfin-plugin-letterboxd-${{ github.ref_name }}.zip"
+          SOURCE_URL="https://github.com/${{ github.repository }}/releases/download/${{ env.REF_NAME }}/jellyfin-plugin-letterboxd-${{ env.REF_NAME }}.zip"
 
           # Use jq to prepend the new version, or just update checksum if it already exists
           jq --arg ver "${VERSION}.0" \
@@ -70,5 +88,5 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add manifest.json
           git diff --cached --quiet && exit 0
-          git commit -m "Update manifest for ${{ github.ref_name }}"
+          git commit -m "Update manifest for ${{ env.REF_NAME }}"
           git push origin HEAD:main
