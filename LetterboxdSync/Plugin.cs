@@ -30,14 +30,13 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
             {
                 Name = "letterboxdsync",
                 EmbeddedResourcePath = $"{GetType().Namespace}.Web.configPage.html",
+                EnableInMainMenu = true,
                 DisplayName = "Letterboxd Sync",
             },
             new PluginPageInfo
             {
                 Name = "letterboxdusersettings",
                 EmbeddedResourcePath = $"{GetType().Namespace}.Web.userConfigPage.html",
-                EnableInMainMenu = true,
-                DisplayName = "Letterboxd",
             },
             new PluginPageInfo
             {
@@ -48,6 +47,11 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
             {
                 Name = "letterboxdstats",
                 EmbeddedResourcePath = $"{GetType().Namespace}.Web.statsPage.html",
+            },
+            new PluginPageInfo
+            {
+                Name = "letterboxdmenu",
+                EmbeddedResourcePath = $"{GetType().Namespace}.Web.letterboxd-menu.js"
             }
         };
     }

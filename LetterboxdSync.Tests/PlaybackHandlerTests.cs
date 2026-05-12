@@ -21,9 +21,13 @@ public class ServiceRegistratorTests
 
         registrator.RegisterServices(services, null!);
 
-        var descriptor = Assert.Single(services);
-        Assert.Equal(typeof(Microsoft.Extensions.Hosting.IHostedService), descriptor.ServiceType);
-        Assert.Equal(typeof(PlaybackHandler), descriptor.ImplementationType);
+        Assert.Contains(services, descriptor =>
+            descriptor.ServiceType == typeof(Microsoft.Extensions.Hosting.IHostedService) &&
+            descriptor.ImplementationType == typeof(PlaybackHandler));
+
+        Assert.Contains(services, descriptor =>
+            descriptor.ServiceType == typeof(Microsoft.Extensions.Hosting.IHostedService) &&
+            descriptor.ImplementationType == typeof(InjectionService));
     }
 }
 

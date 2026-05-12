@@ -126,6 +126,7 @@ public class SyncTask : IScheduledTask
                     SyncHistory.Record(new SyncEvent
                     {
                         FilmTitle = movie.Name, TmdbId = tmdbId,
+                        UserId = user.Id.ToString("N"),
                         Username = user.Username, Timestamp = DateTime.UtcNow,
                         ViewingDate = viewingDate, Status = SyncStatus.Skipped, Source = "scheduled"
                     });
@@ -153,6 +154,7 @@ public class SyncTask : IScheduledTask
                         SyncHistory.Record(new SyncEvent
                         {
                             FilmTitle = movie.Name, FilmSlug = film.Slug, TmdbId = tmdbId,
+                            UserId = user.Id.ToString("N"),
                             Username = user.Username, Timestamp = DateTime.UtcNow,
                             ViewingDate = viewingDate, Status = SyncStatus.Skipped, Source = "scheduled"
                         });
@@ -180,6 +182,7 @@ public class SyncTask : IScheduledTask
                     SyncHistory.Record(new SyncEvent
                     {
                         FilmTitle = movie.Name, FilmSlug = film.Slug, TmdbId = tmdbId,
+                        UserId = user.Id.ToString("N"),
                         Username = user.Username, Timestamp = DateTime.UtcNow,
                         ViewingDate = viewingDate,
                         Status = isRewatch ? SyncStatus.Rewatch : SyncStatus.Success,
@@ -203,6 +206,7 @@ public class SyncTask : IScheduledTask
                     SyncHistory.Record(new SyncEvent
                     {
                         FilmTitle = movie.Name, TmdbId = tmdbId,
+                        UserId = user.Id.ToString("N"),
                         Username = user.Username, Timestamp = DateTime.UtcNow,
                         Status = SyncStatus.Failed, Error = ex.Message, Source = "scheduled"
                     });

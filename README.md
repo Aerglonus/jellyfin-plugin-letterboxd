@@ -4,11 +4,13 @@
 [![GitHub release](https://img.shields.io/github/v/release/aerglonus/jellyfin-plugin-letterboxd)](https://github.com/aerglonus/jellyfin-plugin-letterboxd/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/aerglonus/jellyfin-plugin-letterboxd/total)](https://github.com/aerglonus/jellyfin-plugin-letterboxd/releases)
 
+<p align="center">
+    <img src="/docs/images/thumbnail.png" width="70%">
+</p>
+
 Automatically sync your Jellyfin watch history to your Letterboxd diary. Films are logged in real-time when you finish watching, with a daily scheduled sync as a safety net.
 
 Uses the authenticated Letterboxd Android REST API (`/api/v0`).
-
-<img width="2430" height="1432" alt="CleanShot 2026-03-25 at 23 34 29@2x" src="https://github.com/user-attachments/assets/19f74448-93b9-4ad2-b02b-bfb0c35d0706" />
 
 ## Features
 
@@ -26,6 +28,11 @@ Uses the authenticated Letterboxd Android REST API (`/api/v0`).
 - **Dashboard** — sync stats, activity history, one-click manual retry for failed syncs, and manual triggering
 - **Automatic APIs Retries** — gracefully handles transient Letterboxd errors and timeouts using cloned requests
 - **Date filtering** — limit catch-up syncs to recently watched films
+- **No Extra plugins** - Does not require extra plugins to inject the menus to the sidebar / menu-preferences.
+
+#### Screenshots
+
+- Interface screenshots can be found [Here](/docs/images/).
 
 ## Install
 
@@ -46,12 +53,23 @@ Uses the authenticated Letterboxd Android REST API (`/api/v0`).
 
 ## Setup
 
+#### Non-Admin
+
+1. Home: **Sidebar > Plugins > Letterboxd Sync** or My Prefences menu: **Profile User > Letterboxd Sync > Letterboxd Settings**
+2. Switch to the **Settings** page
+3. Enter your Letterboxd credentials and select your settings.
+4. Click **Save Settings**
+5. First Time run switch to **Stats** page and click Run Sync.
+
+### Admins
+
+- Admins can add and remove users through the Admin Dashboard.
+
 1. Go to **Dashboard > Plugins > Letterboxd Sync**
-2. Switch to the **Settings** tab
-3. Click **+ Add Account**
-4. Select your Jellyfin user, enter your Letterboxd username and password
-5. Check **Enabled**
-6. Click **Save**
+2. Click **+ Add Account**
+3. Select the Jellyfin user, enter the Letterboxd username and password
+4. Check **Enabled**
+5. Click **Save**
 
 That's it. Watch a movie and check your Letterboxd diary.
 
@@ -119,7 +137,3 @@ dotnet build -c Release -p:LetterboxdClientId="YOUR_CLIENT_ID" -p:LetterboxdClie
 ```
 
 Final DLL is in `LetterboxdSync/bin/Release/net9.0/`.
-
-## TO-DO
-
-- Per user and user side account configuration.

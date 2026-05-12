@@ -50,12 +50,64 @@ jobs:
           cd LetterboxdSync/bin/Release/net9.0
           zip -j /tmp/jellyfin-plugin-letterboxd-${{ env.REF_NAME }}.zip LetterboxdSync.dll
 
+      - name: Prepare release notes
+        run: |
+          if [ -f CHANGELOG.md ]; then
+            awk '
+              /^## / {
+                if (capture) exit
+                if ($0 ~ /^## Unreleased/ || $0 ~ /^## \[/ || $0 ~ /^## v?[0-9]/) {
+                  capture = 1
+                  next
+                }
+              }
+              capture { print }
+            ' CHANGELOG.md | sed '/^[[:space:]]*$/d' > /tmp/release-notes.md
+          fi
+
+          if [ ! -s /tmp/release-notes.md ]; then
+            echo "See the changelog for details." > /tmp/release-notes.md
+          fi
+
+      - name: Update changelog
+        run: |
+          if [ ! -f CHANGELOG.md ]; then
+            exit 0
+          fi
+
+          VERSION="${{ env.REF_NAME }}"
+          DATE=$(date -u +"%Y-%m-%d")
+          export VERSION DATE
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
+          import re
+
+          path = Path("CHANGELOG.md")
+          text = path.read_text(encoding="utf-8")
+          version = os.environ["VERSION"]
+          date = os.environ["DATE"]
+
+          match = re.search(r"(?ms)^## Unreleased\s*\n(?P<body>.*?)(?=^## |\Z)", text)
+          if not match:
+              raise SystemExit(0)
+
+          body = match.group("body").strip()
+          if not body:
+              raise SystemExit(0)
+
+          replacement = f"## Unreleased\n\n## {version} - {date}\n\n{body}\n\n"
+          text = text[:match.start()] + replacement + text[match.end():].lstrip()
+          path.write_text(text, encoding="utf-8")
+          PY
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           files: /tmp/jellyfin-plugin-letterboxd-${{ env.REF_NAME }}.zip
           tag_name: ${{ env.TAG_NAME }}
-          generate_release_notes: true
+          body_path: /tmp/release-notes.md
 
       - name: Update manifest
         run: |
@@ -65,6 +117,7 @@ jobs:
           TARGET_ABI="10.11.0.0"
           TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           SOURCE_URL="https://github.com/${{ github.repository }}/releases/download/${{ env.REF_NAME }}/jellyfin-plugin-letterboxd-${{ env.REF_NAME }}.zip"
+          CHANGELOG_TEXT=$(cat /tmp/release-notes.md)
 
           # Use jq to prepend the new version, or just update checksum if it already exists
           jq --arg ver "${VERSION}" \
@@ -72,10 +125,16 @@ jobs:
              --arg url "$SOURCE_URL" \
              --arg ts "$TIMESTAMP" \
              --arg abi "$TARGET_ABI" \
-             --arg cl "See GitHub release notes for details." \
+             --arg cl "$CHANGELOG_TEXT" \
             '.[0].versions |= (
                if any(.version == $ver) then
-                 map(if .version == $ver then .checksum = $cs else . end)
+                 map(if .version == $ver then
+                   .changelog = $cl |
+                   .targetAbi = $abi |
+                   .sourceUrl = $url |
+                   .checksum = $cs |
+                   .timestamp = $ts
+                 else . end)
                else
                  [{version: $ver, changelog: $cl, targetAbi: $abi, sourceUrl: $url, checksum: $cs, timestamp: $ts}] + .
                end
@@ -86,7 +145,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add manifest.json
+          git add manifest.json CHANGELOG.md
           git diff --cached --quiet && exit 0
-          git commit -m "Update manifest for ${{ env.REF_NAME }}"
+          git commit -m "Update release metadata for ${{ env.REF_NAME }}"
           git push origin HEAD:main

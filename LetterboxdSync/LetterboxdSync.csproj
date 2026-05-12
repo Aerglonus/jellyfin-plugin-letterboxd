@@ -25,6 +25,7 @@
     <EmbeddedResource Include="Web\configPage.js" />
     <EmbeddedResource Include="Web\statsPage.html" />
     <EmbeddedResource Include="Web\userConfigPage.html" />
+    <EmbeddedResource Include="Web\letterboxd-menu.js" />
   </ItemGroup>
 
   <ItemGroup>

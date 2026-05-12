@@ -1,7 +1,11 @@
 using System;
+using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Net.Mime;
 using System.Threading.Tasks;
+using Jellyfin.Data.Enums;
+using Jellyfin.Database.Implementations.Entities;
 using LetterboxdSync.Configuration;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Entities;
@@ -19,6 +23,10 @@ namespace LetterboxdSync.Api;
 [Produces(MediaTypeNames.Application.Json)]
 public class LetterboxdController : ControllerBase
 {
+    private const string ManualSource = "manual";
+    private const string RetrySource = "retry";
+    private const string ReviewSource = "review";
+
     private readonly ILogger<LetterboxdController> _logger;
     private readonly IUserManager _userManager;
     private readonly ILibraryManager _libraryManager;
@@ -34,11 +42,51 @@ public class LetterboxdController : ControllerBase
 
     private static PluginConfiguration Config => Plugin.Instance!.Configuration;
 
+    [AllowAnonymous]
+    [HttpGet("UserSettingsPage")]
+    [Produces(MediaTypeNames.Text.Html)]
+    public ActionResult GetUserSettingsPage()
+    {
+        return GetResource("userConfigPage.html");
+    }
+
+    [AllowAnonymous]
+    [HttpGet("StatsPage")]
+    [Produces(MediaTypeNames.Text.Html)]
+    public ActionResult GetStatsPage()
+    {
+        return GetResource("statsPage.html");
+    }
+
+    [AllowAnonymous]
+    [HttpGet("MenuScript")]
+    [Produces("text/javascript")]
+    public ActionResult GetMenuScript()
+    {
+        return GetResource("letterboxd-menu.js", "text/javascript");
+    }
+
+    private ActionResult GetResource(string fileName, string contentType = "text/html")
+    {
+        var resourcePath = $"LetterboxdSync.Web.{fileName}";
+        using var stream = GetType().Assembly.GetManifestResourceStream(resourcePath);
+        if (stream == null) return NotFound();
+        using var reader = new System.IO.StreamReader(stream);
+        var content = reader.ReadToEnd();
+        return Content(content, contentType);
+    }
+
     [HttpGet("Stats")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public ActionResult GetStats()
     {
-        var (total, success, failed, skipped, rewatches) = SyncHistory.GetStats();
+        var account = GetCurrentUserAccount();
+        var userId = GetCurrentUserId();
+        var usernames = GetCurrentHistoryUsernames(account);
+
+        var (total, success, failed, skipped, rewatches) = string.IsNullOrEmpty(userId)
+            ? SyncHistory.GetStats(usernames)
+            : SyncHistory.GetStatsForUser(userId, usernames);
         return Ok(new
         {
             total,
@@ -53,8 +101,211 @@ public class LetterboxdController : ControllerBase
     [ProducesResponseType(StatusCodes.Status200OK)]
     public ActionResult GetHistory([FromQuery] int count = 50)
     {
-        var events = SyncHistory.GetRecent(Math.Min(count, 200));
+        var account = GetCurrentUserAccount();
+        var userId = GetCurrentUserId();
+        var usernames = GetCurrentHistoryUsernames(account);
+
+        var events = string.IsNullOrEmpty(userId)
+            ? SyncHistory.GetRecent(Math.Min(count, 200), usernames)
+            : SyncHistory.GetRecentForUser(Math.Min(count, 200), userId, usernames);
         return Ok(events);
+    }
+
+    [HttpPost("RunSync")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult> RunSync()
+    {
+        if (!TryGetCurrentUser(out var userId, out var user, out var errorResult))
+            return errorResult!;
+
+        var account = GetEnabledAccount(userId);
+        if (account == null)
+            return BadRequest(new { error = "No enabled Letterboxd account configured for this user" });
+
+        var result = await RunSyncForUserAsync(user, account).ConfigureAwait(false);
+        return Ok(result);
+    }
+
+    private IReadOnlyCollection<string> GetCurrentHistoryUsernames(Account? account)
+    {
+        var usernames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        if (!string.IsNullOrWhiteSpace(account?.LetterboxdUsername))
+        {
+            usernames.Add(account.LetterboxdUsername);
+        }
+
+        var userId = User.Claims.FirstOrDefault(c => c.Type == "Jellyfin-UserId")?.Value;
+        if (Guid.TryParse(userId, out var parsedUserId))
+        {
+            var user = _userManager.GetUserById(parsedUserId);
+            if (!string.IsNullOrWhiteSpace(user?.Username))
+            {
+                usernames.Add(user.Username);
+            }
+        }
+
+        return usernames;
+    }
+
+    private Account? GetCurrentUserAccount()
+    {
+        var userId = GetCurrentUserId();
+        return string.IsNullOrEmpty(userId)
+            ? null
+            : Config.Accounts.FirstOrDefault(a => a.UserJellyfinId == userId);
+    }
+
+    private Account? GetEnabledAccount(string userId)
+    {
+        return Config.Accounts.FirstOrDefault(a => a.Enabled && a.UserJellyfinId == userId);
+    }
+
+    private bool TryGetCurrentUser(out string userId, out User user, out ActionResult? errorResult)
+    {
+        user = null!;
+        userId = GetCurrentUserId() ?? string.Empty;
+        if (string.IsNullOrEmpty(userId))
+        {
+            errorResult = BadRequest(new { error = "Could not determine user" });
+            return false;
+        }
+
+        var currentUser = _userManager.GetUserById(new Guid(userId));
+        if (currentUser == null)
+        {
+            errorResult = BadRequest(new { error = "Invalid Jellyfin user" });
+            return false;
+        }
+
+        user = currentUser;
+        errorResult = null;
+        return true;
+    }
+
+    private static SyncEvent CreateSyncEvent(
+        User user,
+        BaseItem movie,
+        int tmdbId,
+        SyncStatus status,
+        string source,
+        DateTime? viewingDate,
+        string filmSlug = "",
+        string? error = null)
+    {
+        return new SyncEvent
+        {
+            FilmTitle = movie.Name,
+            FilmSlug = filmSlug,
+            TmdbId = tmdbId,
+            UserId = user.Id.ToString("N"),
+            Username = user.Username,
+            Timestamp = DateTime.UtcNow,
+            ViewingDate = viewingDate,
+            Status = status,
+            Error = error,
+            Source = source
+        };
+    }
+
+    private async Task<object> RunSyncForUserAsync(User user, Account account)
+    {
+        var movies = _libraryManager.GetItemList(new InternalItemsQuery(user)
+        {
+            IncludeItemTypes = new[] { BaseItemKind.Movie },
+            IsVirtualItem = false,
+            IsPlayed = true,
+            OrderBy = new[] { (ItemSortBy.SortName, Jellyfin.Database.Implementations.Enums.SortOrder.Ascending) }
+        }).ToList();
+
+        if (account.EnableDateFilter)
+        {
+            var cutoff = DateTime.UtcNow.AddDays(-account.DateFilterDays);
+            movies = movies.Where(movie =>
+            {
+                var userData = _userDataManager.GetUserData(user, movie);
+                return userData?.LastPlayedDate.HasValue == true && userData.LastPlayedDate.Value >= cutoff;
+            }).ToList();
+        }
+
+        using var client = await SyncHelpers.CreateAuthenticatedClientAsync(account, user.Username, _logger).ConfigureAwait(false);
+        if (client == null)
+        {
+            return new { synced = 0, skipped = 0, failed = 0, message = "Authentication failed" };
+        }
+
+        var synced = 0;
+        var skipped = 0;
+        var failed = 0;
+        var diaryTmdbIds = new HashSet<int>();
+
+        try
+        {
+            var diaryList = await client.GetDiaryTmdbIdsAsync(account.LetterboxdUsername).ConfigureAwait(false);
+            diaryTmdbIds = new HashSet<int>(diaryList);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning("Failed to fetch Letterboxd diary for {Username}: {Message}. Falling back to individual checks.", user.Username, ex.Message);
+        }
+
+        foreach (var movie in movies)
+        {
+            var tmdbIdStr = movie.GetProviderId(MediaBrowser.Model.Entities.MetadataProvider.Tmdb);
+            if (!int.TryParse(tmdbIdStr, out var tmdbId))
+            {
+                skipped++;
+                continue;
+            }
+
+            var userData = _userDataManager.GetUserData(user, movie);
+            var viewingDate = userData?.LastPlayedDate?.Date ?? DateTime.Now.Date;
+
+            if (diaryTmdbIds.Contains(tmdbId))
+            {
+                SyncHistory.Record(CreateSyncEvent(user, movie, tmdbId, SyncStatus.Skipped, ManualSource, viewingDate));
+                skipped++;
+                continue;
+            }
+
+            FilmResult? film = null;
+            try
+            {
+                film = await client.LookupFilmByTmdbIdAsync(tmdbId).ConfigureAwait(false);
+
+                var diary = await client.GetDiaryInfoAsync(film.FilmId).ConfigureAwait(false);
+                if (diary.IsWatched || diary.HasAnyEntry || (diary.LastDate != null && diary.LastDate.Value.Date == viewingDate))
+                {
+                    await SyncHelpers.SyncFavoritesAsync(client, account, film.FilmId, userData?.IsFavorite ?? false, movie.Name, _logger).ConfigureAwait(false);
+
+                    SyncHistory.Record(CreateSyncEvent(user, movie, tmdbId, SyncStatus.Skipped, ManualSource, viewingDate, film.Slug));
+                    skipped++;
+                    continue;
+                }
+
+                var liked = account.SyncFavorites && (userData?.IsFavorite ?? false);
+                var rating = SyncHelpers.GetLetterboxdRating(userData?.Rating);
+
+                await client.MarkAsWatchedAsync(film.Slug, film.FilmId, userData?.LastPlayedDate, liked, film.ProductionId, false, rating).ConfigureAwait(false);
+                await SyncHelpers.SyncFavoritesAsync(client, account, film.FilmId, userData?.IsFavorite ?? false, movie.Name, _logger).ConfigureAwait(false);
+
+                _logger.LogInformation("Manually synced {Title} (TMDb:{TmdbId}) to Letterboxd for {Username} on {Date}",
+                    movie.Name, tmdbId, user.Username, viewingDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+
+                SyncHistory.Record(CreateSyncEvent(user, movie, tmdbId, SyncStatus.Success, ManualSource, viewingDate, film.Slug));
+                synced++;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to manually sync {Title} (TMDb:{TmdbId}) for {Username}", movie.Name, tmdbId, user.Username);
+
+                SyncHistory.Record(CreateSyncEvent(user, movie, tmdbId, SyncStatus.Failed, ManualSource, viewingDate, film?.Slug ?? string.Empty, ex.Message));
+                failed++;
+            }
+        }
+
+        return new { synced, skipped, failed };
     }
 
     [HttpPost("Review")]
@@ -68,15 +319,10 @@ public class LetterboxdController : ControllerBase
         if (string.IsNullOrWhiteSpace(request.ReviewText) && !request.IsRewatch)
             return BadRequest(new { error = "reviewText is required unless logging a rewatch" });
 
-        var userId = User.Claims.FirstOrDefault(c => c.Type == "Jellyfin-UserId")?.Value;
-        if (string.IsNullOrEmpty(userId))
-            return BadRequest(new { error = "Could not determine user" });
-
-        var account = Config.Accounts.FirstOrDefault(
-            a => a.Enabled && a.UserJellyfinId == userId.Replace("-", ""));
-
-        if (account == null)
-            return BadRequest(new { error = "No Letterboxd account configured for this user" });
+        var account = GetCurrentUserAccount();
+        if (account == null || !account.Enabled)
+            return BadRequest(new { error = "No enabled Letterboxd account configured for this user" });
+        var userId = GetCurrentUserId();
 
         using var client = new LetterboxdClient(_logger);
         try
@@ -89,7 +335,10 @@ public class LetterboxdController : ControllerBase
             }
 
             int? tmdbId = null;
-            var historyMatch = SyncHistory.GetRecent(500).FirstOrDefault(h => h.FilmSlug == request.FilmSlug && h.TmdbId > 0);
+            var history = string.IsNullOrEmpty(userId)
+                ? SyncHistory.GetRecent(500)
+                : SyncHistory.GetRecentForUser(500, userId, GetCurrentHistoryUsernames(account));
+            var historyMatch = history.FirstOrDefault(h => h.FilmSlug == request.FilmSlug && h.TmdbId > 0);
             if (historyMatch != null)
                 tmdbId = historyMatch.TmdbId;
 
@@ -105,15 +354,15 @@ public class LetterboxdController : ControllerBase
                 request.FilmSlug, account.LetterboxdUsername);
 
             var status = request.IsRewatch ? SyncStatus.Rewatch : SyncStatus.Success;
-            var label = request.IsRewatch ? "Rewatch + review" : "Review";
             SyncHistory.Record(new SyncEvent
             {
                 FilmTitle = request.FilmSlug.Replace("-", " "),
                 FilmSlug = request.FilmSlug,
+                UserId = userId ?? string.Empty,
                 Username = account.LetterboxdUsername,
                 Timestamp = DateTime.UtcNow,
                 Status = status,
-                Source = "review"
+                Source = ReviewSource
             });
 
             return Ok(new { success = true });
@@ -126,11 +375,12 @@ public class LetterboxdController : ControllerBase
             {
                 FilmTitle = request.FilmSlug.Replace("-", " "),
                 FilmSlug = request.FilmSlug,
+                UserId = userId ?? string.Empty,
                 Username = account?.LetterboxdUsername ?? "unknown",
                 Timestamp = DateTime.UtcNow,
                 Status = SyncStatus.Failed,
                 Error = ex.Message,
-                Source = "review"
+                Source = ReviewSource
             });
 
             return BadRequest(new { error = ex.Message });
@@ -145,17 +395,10 @@ public class LetterboxdController : ControllerBase
         if (request.TmdbId <= 0)
             return BadRequest(new { error = "tmdbId is required" });
 
-        var userId = User.Claims.FirstOrDefault(c => c.Type == "Jellyfin-UserId")?.Value;
-        if (string.IsNullOrEmpty(userId))
-            return BadRequest(new { error = "Could not determine user" });
+        if (!TryGetCurrentUser(out var userId, out var user, out var errorResult))
+            return errorResult!;
 
-        var user = _userManager.GetUserById(new Guid(userId));
-        if (user == null)
-            return BadRequest(new { error = "Invalid Jellyfin user" });
-
-        var account = Config.Accounts.FirstOrDefault(
-            a => a.Enabled && a.UserJellyfinId == userId.Replace("-", ""));
-
+        var account = GetEnabledAccount(userId);
         if (account == null)
             return BadRequest(new { error = "No Letterboxd account configured for this user" });
 
@@ -171,7 +414,7 @@ public class LetterboxdController : ControllerBase
 
             var movie = _libraryManager.GetItemList(new InternalItemsQuery(user)
             {
-                IncludeItemTypes = new[] { Jellyfin.Data.Enums.BaseItemKind.Movie },
+                IncludeItemTypes = new[] { BaseItemKind.Movie },
                 IsVirtualItem = false,
                 Recursive = true
             }).FirstOrDefault(m => m.GetProviderId(MediaBrowser.Model.Entities.MetadataProvider.Tmdb) == request.TmdbId.ToString());
@@ -188,27 +431,12 @@ public class LetterboxdController : ControllerBase
             bool isRewatch = diary.IsWatched || diary.HasAnyEntry;
             bool liked = account.SyncFavorites && (userData?.IsFavorite ?? false);
 
-            double? lbRating = null;
-            if (userData?.Rating.HasValue == true)
-            {
-                var mapped = Math.Round(userData.Rating.Value / 2.0 * 2) / 2.0;
-                lbRating = Math.Clamp(mapped, 0.5, 5.0);
-            }
+            var lbRating = SyncHelpers.GetLetterboxdRating(userData?.Rating);
 
             await client.MarkAsWatchedAsync(film.Slug, film.FilmId, DateTime.Now, liked,
                 film.ProductionId, isRewatch, lbRating).ConfigureAwait(false);
 
-            if (account.SyncFavorites)
-            {
-                try
-                {
-                    await client.SetFilmLikeAsync(film.FilmId, userData?.IsFavorite ?? false).ConfigureAwait(false);
-                }
-                catch (Exception likeEx)
-                {
-                    _logger.LogWarning("Failed to sync like status for {Title} ({FilmId}): {Message}", movie.Name, film.FilmId, likeEx.Message);
-                }
-            }
+            await SyncHelpers.SyncFavoritesAsync(client, account, film.FilmId, userData?.IsFavorite ?? false, movie.Name, _logger).ConfigureAwait(false);
 
             _logger.LogInformation("Manually retried sync for {Title} by {Username}",
                 movie.Name, account.LetterboxdUsername);
@@ -219,11 +447,12 @@ public class LetterboxdController : ControllerBase
                 FilmTitle = movie.Name,
                 FilmSlug = film.Slug,
                 TmdbId = request.TmdbId,
+                UserId = userId,
                 Username = account.LetterboxdUsername,
                 Timestamp = DateTime.UtcNow,
                 ViewingDate = viewingDate,
                 Status = status,
-                Source = "retry"
+                Source = RetrySource
             });
 
             return Ok(new { success = true });
@@ -233,7 +462,8 @@ public class LetterboxdController : ControllerBase
             _logger.LogError("Failed to manually retry sync for TMDb {TmdbId}: {Message}", request.TmdbId, ex.Message);
 
             string filmTitle = $"TMDb ID: {request.TmdbId}";
-            var oldEvent = SyncHistory.GetRecent(500).FirstOrDefault(e => e.TmdbId == request.TmdbId);
+            var oldHistory = SyncHistory.GetRecentForUser(500, userId, GetCurrentHistoryUsernames(account));
+            var oldEvent = oldHistory.FirstOrDefault(e => e.TmdbId == request.TmdbId);
             if (oldEvent != null && !string.IsNullOrEmpty(oldEvent.FilmTitle) && !oldEvent.FilmTitle.StartsWith("TMDb ID"))
             {
                 filmTitle = oldEvent.FilmTitle;
@@ -243,11 +473,12 @@ public class LetterboxdController : ControllerBase
             {
                 FilmTitle = filmTitle,
                 TmdbId = request.TmdbId,
+                UserId = userId,
                 Username = account?.LetterboxdUsername ?? "unknown",
                 Timestamp = DateTime.UtcNow,
                 Status = SyncStatus.Failed,
                 Error = ex.Message,
-                Source = "retry"
+                Source = RetrySource
             });
 
             if (ex.Message.Contains("Could not find film matching"))
@@ -303,7 +534,7 @@ public class LetterboxdController : ControllerBase
         account.LetterboxdUsername = request.LetterboxdUsername;
         if (!string.IsNullOrEmpty(request.LetterboxdPassword))
             account.LetterboxdPassword = CryptoHelpers.Encrypt(request.LetterboxdPassword);
-        
+
         account.Enabled = request.Enabled;
         account.SyncFavorites = request.SyncFavorites;
         account.EnableDateFilter = request.EnableDateFilter;

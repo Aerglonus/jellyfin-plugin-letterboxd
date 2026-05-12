@@ -106,6 +106,7 @@ public class PlaybackHandler : IHostedService, IDisposable
                     SyncHistory.Record(new SyncEvent
                     {
                         FilmTitle = e.Item.Name, FilmSlug = film.Slug, TmdbId = tmdbId,
+                        UserId = user.Id.ToString("N"),
                         Username = user.Username, Timestamp = DateTime.UtcNow,
                         ViewingDate = viewingDate, Status = SyncStatus.Skipped, Source = "playback"
                     });
@@ -129,6 +130,7 @@ public class PlaybackHandler : IHostedService, IDisposable
                 SyncHistory.Record(new SyncEvent
                 {
                     FilmTitle = e.Item.Name, FilmSlug = film.Slug, TmdbId = tmdbId,
+                    UserId = user.Id.ToString("N"),
                     Username = user.Username, Timestamp = DateTime.UtcNow,
                     ViewingDate = viewingDate,
                     Status = isRewatch ? SyncStatus.Rewatch : SyncStatus.Success,
@@ -151,6 +153,7 @@ public class PlaybackHandler : IHostedService, IDisposable
                 SyncHistory.Record(new SyncEvent
                 {
                     FilmTitle = e.Item.Name, TmdbId = tmdbId,
+                    UserId = user.Id.ToString("N"),
                     Username = user.Username, Timestamp = DateTime.UtcNow,
                     Status = SyncStatus.Failed, Error = ex.Message, Source = "playback"
                 });

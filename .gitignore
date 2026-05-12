@@ -5,5 +5,8 @@ obj/
 .vs/
 *.nupkg
 release/
+artifacts/
+.github/workflows/*-local.yml
 local.props
 deploy.sh
+LetterboxdSync/Web/mock_*.html

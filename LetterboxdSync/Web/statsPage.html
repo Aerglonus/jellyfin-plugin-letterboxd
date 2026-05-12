@@ -6,359 +6,589 @@
 </head>
 
 <body>
-    <div id="letterboxdStatsPage" data-role="page" class="page type-interior pluginConfigurationPage"
-        data-require="emby-input,emby-button">
-        <div data-role="content">
-            <div class="content-primary">
-                <h2>Letterboxd Sync Stats</h2>
-                <p><a href="configurationpage?name=letterboxdsync" style="color: #00e054;">Back to Settings</a></p>
+    <div id="letterboxdStatsPage" data-role="page" class="page type-interior">
+        <style>
+            :root {
+                --lb-green: #40c977;
+                --lb-bg: #181818;
+                --lb-surface: #1f1f1f;
+                --lb-card: #212121;
+                --lb-card-soft: rgba(255, 255, 255, 0.05);
+                --lb-border: rgba(255, 255, 255, 0.027);
+                --lb-border-strong: rgba(255, 255, 255, 0.2);
+                --lb-text: #adadad;
+                --lb-white: #ffffff;
+                --lb-blue: #339cff;
+                --lb-purple: #ad7bf9;
+                --lb-red: #fa423e;
+                --lb-black: #000000;
+            }
 
-                <div style="margin-bottom: 1.5em; display: flex; gap: 1em; align-items: center;">
-                    <button type="button" class="raised button-submit" id="runSyncBtn" style="padding: 0.5em 1.5em;">
-                        Run Sync Now
+            body {
+                background-color: var(--lb-bg) !important;
+                color: var(--lb-white);
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                margin: 0;
+            }
+
+            .lb-header {
+                background: rgb(18, 18, 18);
+                backdrop-filter: blur(10px);
+                /* border-bottom: 1px solid var(--lb-border); */
+                padding: 1em 2em;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                position: sticky;
+                top: 0;
+                z-index: 1000;
+            }
+
+            .lb-header-title {
+                display: flex;
+                align-items: center;
+                gap: 0.8em;
+                font-weight: bold;
+                font-size: 1.2em;
+                color: var(--lb-green);
+            }
+
+            .lb-header-nav {
+                display: flex;
+                gap: 1.5em;
+            }
+
+            .lb-nav-link {
+                color: var(--lb-text);
+                text-decoration: none;
+                font-size: 0.9em;
+                display: flex;
+                align-items: center;
+                gap: 0.4em;
+                transition: color 0.2s;
+            }
+
+            .lb-nav-link:hover {
+                color: var(--lb-white);
+            }
+
+            .lb-nav-link.active {
+                color: var(--lb-green);
+            }
+
+            .lb-main {
+                max-width: 1000px;
+                margin: 3em auto;
+                padding: 0 2em;
+            }
+
+            .lb-summary-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+                gap: 1.5em;
+                margin-bottom: 3em;
+            }
+
+            .lb-stat-card {
+                background: var(--lb-card);
+                padding: 1.5em;
+                border-radius: 12px;
+                text-align: center;
+                border: 1px solid var(--lb-border);
+                box-shadow: 0 12px 36px rgba(0, 0, 0, 0.24);
+            }
+
+            .lb-stat-value {
+                font-size: 2.5em;
+                font-weight: bold;
+                margin-bottom: 0.1em;
+            }
+
+            .lb-stat-label {
+                color: var(--lb-text);
+                font-size: 0.8em;
+                text-transform: uppercase;
+                letter-spacing: 0.1em;
+            }
+
+            .lb-card {
+                background: var(--lb-card);
+                padding: 2em;
+                border-radius: 12px;
+                border: 1px solid var(--lb-border);
+            }
+
+            .lb-card h3 {
+                margin-top: 0;
+                margin-bottom: 1.5em;
+                font-size: 1.4em;
+                display: flex;
+                align-items: center;
+                gap: 0.5em;
+            }
+
+            .lb-table {
+                width: 100%;
+                border-collapse: collapse;
+            }
+
+            .lb-table th {
+                text-align: left;
+                padding: 1em 0.5em;
+                color: var(--lb-text);
+                font-size: 0.85em;
+                text-transform: uppercase;
+                border-bottom: 2px solid var(--lb-border);
+            }
+
+            .lb-table td {
+                padding: 1em 0.5em;
+                border-bottom: 1px solid var(--lb-border);
+            }
+
+            .lb-btn {
+                padding: 0.6em 1.2em;
+                border-radius: 6px;
+                font-weight: bold;
+                cursor: pointer;
+                transition: all 0.2s;
+                border: none;
+                font-size: 0.9em;
+                display: flex;
+                align-items: center;
+                gap: 0.4em;
+            }
+
+            #runSyncBtn {
+                background-color: var(--lb-green);
+            }
+
+            .review-btn {
+                border-color: #ad7bf9 !important;
+                color: #ad7bf9 !important
+            }
+
+
+            .lb-btn-primary {
+                background: var(--lb-blue);
+                color: var(--lb-black);
+            }
+
+            .lb-btn-outline {
+                background: var(--lb-card-soft);
+                color: var(--lb-white);
+                border: 1px solid var(--lb-border-strong);
+            }
+
+            .lb-btn:hover {
+                filter: brightness(1.1);
+            }
+
+            .material-icons {
+                font-family: 'Material Icons';
+                font-size: 24px;
+                display: inline-block;
+                vertical-align: middle;
+            }
+
+            /* Modal Styling */
+            .lb-modal {
+                display: none;
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(8, 9, 10, 0.86);
+                backdrop-filter: blur(5px);
+                z-index: 2000;
+                align-items: center;
+                justify-content: center;
+            }
+
+            .lb-modal-content {
+                display: flex;
+                flex-direction: column;
+                background: var(--lb-card);
+                padding: 2.5em;
+                border-radius: 16px;
+                width: 90%;
+                max-width: 550px;
+                border: 1px solid var(--lb-border-strong);
+            }
+        </style>
+        <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+
+        <header class="lb-header">
+            <div class="lb-header-title">
+                <span class="material-icons">movie_filter</span>
+                Letterboxd Sync
+            </div>
+            <nav class="lb-header-nav">
+                <a href="#" id="homeLink" class="lb-nav-link">
+                    <span class="material-icons">home</span>
+                    Jellyfin Home
+                </a>
+                <a href="#" class="lb-nav-link active">
+                    <span class="material-icons">analytics</span>
+                    Stats
+                </a>
+                <a href="#" id="settingsLink" class="lb-nav-link">
+                    <span class="material-icons">settings</span>
+                    Settings
+                </a>
+            </nav>
+        </header>
+
+        <main class="lb-main">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2em;">
+                <h2 style="margin: 0;">Sync Statistics</h2>
+                <div style="display: flex; gap: 1em; align-items: center;">
+                    <span id="syncStatus" style="font-size: 0.9em; color: var(--lb-text);"></span>
+                    <button id="runSyncBtn" class="lb-btn lb-btn-primary">
+                        <span class="material-icons">sync</span>
+                        Run Sync
                     </button>
-                    <span id="syncStatus" style="color: #9ab; font-size: 0.9em;"></span>
+                </div>
+            </div>
+
+            <div class="lb-summary-grid">
+                <div class="lb-stat-card">
+                    <div class="lb-stat-value" id="statTotal">-</div>
+                    <div class="lb-stat-label">Total Syncs</div>
+                </div>
+                <div class="lb-stat-card">
+                    <div class="lb-stat-value" style="color: var(--lb-green);" id="statSuccess">-</div>
+                    <div class="lb-stat-label">Successful</div>
+                </div>
+                <div class="lb-stat-card">
+                    <div class="lb-stat-value" style="color: var(--lb-purple);" id="statRewatches">-</div>
+                    <div class="lb-stat-label">Rewatches</div>
+                </div>
+                <div class="lb-stat-card">
+                    <div class="lb-stat-value" style="color: var(--lb-text);" id="statSkipped">-</div>
+                    <div class="lb-stat-label">Skipped</div>
+                </div>
+                <div class="lb-stat-card">
+                    <div class="lb-stat-value" style="color: var(--lb-red);" id="statFailed">-</div>
+                    <div class="lb-stat-label">Failed</div>
+                </div>
+            </div>
+
+            <div class="lb-card">
+                <h3><span class="material-icons">history</span> Recent Activity</h3>
+                <table class="lb-table">
+                    <thead>
+                        <tr>
+                            <th>Film</th>
+                            <th>Status</th>
+                            <th>Source</th>
+                            <th>Date</th>
+                            <th>Review</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historyBody">
+                        <tr>
+                            <td colspan="5" style="text-align: center; padding: 3em; color: var(--lb-text);">Loading
+                                history...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </main>
+
+        <div id="reviewModal" class="lb-modal">
+            <div class="lb-modal-content">
+                <h3 id="reviewTitle" style="margin-top: 0;">Post Review</h3>
+                <textarea id="reviewText" rows="6"
+                    style="background: var(--lb-surface); color: var(--lb-white); border: 1px solid var(--lb-border-strong); border-radius: 8px; padding: 1em; font-family: inherit; resize: vertical;"
+                    placeholder="What did you think?"></textarea>
+
+                <div style="margin: 1.5em 0; display: flex; gap: 1.5em;">
+                    <label style="display: flex; align-items: center; gap: 0.5em; cursor: pointer;">
+                        <input type="checkbox" id="reviewSpoilers" style="accent-color: var(--lb-green);" />
+                        Contains spoilers
+                    </label>
                 </div>
 
-                <div class="verticalSection" id="statsCards"
-                    style="display: flex; gap: 1em; flex-wrap: wrap; margin-bottom: 2em;">
-                    <div
-                        style="background: #1a1e23; padding: 1em 1.5em; border-radius: 8px; min-width: 120px; text-align: center;">
-                        <div style="font-size: 2em; font-weight: bold;" id="statTotal">-</div>
-                        <div style="color: #9ab; font-size: 0.9em;">Total</div>
-                    </div>
-                    <div
-                        style="background: #1a1e23; padding: 1em 1.5em; border-radius: 8px; min-width: 120px; text-align: center;">
-                        <div style="font-size: 2em; font-weight: bold; color: #00e054;" id="statSuccess">-</div>
-                        <div style="color: #9ab; font-size: 0.9em;">Synced</div>
-                    </div>
-                    <div
-                        style="background: #1a1e23; padding: 1em 1.5em; border-radius: 8px; min-width: 120px; text-align: center;">
-                        <div style="font-size: 2em; font-weight: bold; color: #40bcf4;" id="statRewatches">-</div>
-                        <div style="color: #9ab; font-size: 0.9em;">Rewatches</div>
-                    </div>
-                    <div
-                        style="background: #1a1e23; padding: 1em 1.5em; border-radius: 8px; min-width: 120px; text-align: center;">
-                        <div style="font-size: 2em; font-weight: bold; color: #999;" id="statSkipped">-</div>
-                        <div style="color: #9ab; font-size: 0.9em;">Skipped</div>
-                    </div>
-                    <div
-                        style="background: #1a1e23; padding: 1em 1.5em; border-radius: 8px; min-width: 120px; text-align: center;">
-                        <div style="font-size: 2em; font-weight: bold; color: #e74c3c;" id="statFailed">-</div>
-                        <div style="color: #9ab; font-size: 0.9em;">Failed</div>
-                    </div>
+                <div style="display: flex; gap: 1em; justify-content: flex-end;">
+                    <button id="reviewCancel" class="lb-btn lb-btn-outline">Cancel</button>
+                    <button id="reviewSubmit" class="lb-btn lb-btn-primary">Post to Letterboxd</button>
                 </div>
+                <div id="reviewStatus" style="margin-top: 1em; font-size: 0.9em; text-align: center;"></div>
+            </div>
+        </div>
 
-                <div class="verticalSection">
-                    <h3>Recent Activity</h3>
-                    <table id="historyTable" style="width: 100%; border-collapse: collapse; font-size: 0.9em;">
-                        <thead>
-                            <tr style="border-bottom: 2px solid #333; text-align: left;">
-                                <th style="padding: 0.5em;">Film</th>
-                                <th style="padding: 0.5em;">Status</th>
-                                <th style="padding: 0.5em;">Source</th>
-                                <th style="padding: 0.5em;">Date</th>
-                                <th style="padding: 0.5em;">Review</th>
-                            </tr>
-                        </thead>
-                        <tbody id="historyBody">
-                            <tr>
-                                <td colspan="5" style="padding: 1em; color: #666;">Loading...</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
+        <script type="text/javascript">
+            var LBStats = {
+                currentSlug: '',
+                serverUrl: '',
+                token: '',
 
-                <div id="reviewModal"
-                    style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.7); z-index:9999; align-items:center; justify-content:center;">
-                    <div
-                        style="background:#1a1e23; padding:2em; border-radius:8px; max-width:500px; width:90%; margin:auto; margin-top:15vh;">
-                        <h3 id="reviewTitle" style="margin-top:0;">Write Review</h3>
-                        <textarea id="reviewText" rows="6"
-                            style="width:100%; padding:0.5em; background:#2c3440; color:#fff; border:1px solid #444; border-radius:4px; resize:vertical;"
-                            placeholder="Write your review..."></textarea>
-                        <div style="margin-top:0.5em;">
-                            <label><input type="checkbox" id="reviewSpoilers" /> Contains spoilers</label>
-                        </div>
-                        <div style="margin-top:1em; display:flex; gap:1em;">
-                            <button type="button" class="raised button-submit" id="reviewSubmit">Post to
-                                Letterboxd</button>
-                            <button type="button" class="raised button-cancel" id="reviewCancel">Cancel</button>
-                        </div>
-                        <div id="reviewStatus" style="margin-top:0.5em; font-size:0.9em;"></div>
-                    </div>
-                </div>
+                resolveAuth: function () {
+                    var self = this;
+                    var params = new URLSearchParams(window.location.search);
+                    var pServer = params.get('server');
+                    var pToken = params.get('token');
 
-                <script type="text/javascript">
-                    var LBStats = {
-                        currentSlug: '',
-                        serverUrl: '',
-                        token: '',
+                    if (pServer && pToken) {
+                        self.serverUrl = pServer;
+                        self.token = pToken;
+                    } else if (typeof ApiClient !== 'undefined') {
+                        try {
+                            self.serverUrl = ApiClient.serverAddress();
+                            self.token = ApiClient.accessToken();
+                        } catch (e) { }
+                    }
 
-                        resolveAuth: function () {
-                            // Try ApiClient first
-                            if (typeof ApiClient !== 'undefined') {
-                                try {
-                                    this.serverUrl = ApiClient.serverAddress();
-                                    this.token = ApiClient.accessToken();
-                                    if (this.serverUrl && this.token) return true;
-                                } catch (e) { }
+                    if (!self.serverUrl || !self.token) {
+                        try {
+                            var creds = JSON.parse(localStorage.getItem('jellyfin_credentials') || '{}');
+                            var server = (creds.Servers || [])[0];
+                            if (server) {
+                                self.serverUrl = self.serverUrl || server.ManualAddress || server.LocalAddress || '';
+                                self.token = self.token || server.AccessToken || '';
                             }
-                            // Fall back to localStorage credentials
-                            try {
-                                var creds = JSON.parse(localStorage.getItem('jellyfin_credentials') || '{}');
-                                var server = (creds.Servers || [])[0];
-                                if (server) {
-                                    this.serverUrl = server.ManualAddress || server.LocalAddress || '';
-                                    this.token = server.AccessToken || '';
-                                    return !!(this.serverUrl && this.token);
-                                }
-                            } catch (e) { }
-                            return false;
+                        } catch (e) { }
+                    }
+
+                    if (!self.serverUrl || !self.token) return false;
+
+                    if (typeof window.ApiClient === 'undefined') {
+                        window.ApiClient = {
+                            serverAddress: function () { return self.serverUrl; },
+                            accessToken: function () { return self.token; },
+                            getUrl: function (path) { return self.serverUrl + '/' + path; }
+                        };
+                    }
+                    return true;
+                },
+
+                apiFetch: function (path) {
+                    return fetch(this.serverUrl + '/' + path, {
+                        headers: { 'Authorization': 'MediaBrowser Token="' + this.token + '"' }
+                    });
+                },
+
+                apiPost: function (path, body) {
+                    return fetch(this.serverUrl + '/' + path, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': 'MediaBrowser Token="' + this.token + '"',
+                            'Content-Type': 'application/json'
                         },
+                        body: JSON.stringify(body)
+                    });
+                },
 
-                        apiFetch: function (path) {
-                            return fetch(this.serverUrl + '/' + path, {
-                                headers: { 'Authorization': 'MediaBrowser Token="' + this.token + '"' }
-                            });
-                        },
+                getEventValue: function (event, pascalName, camelName) {
+                    if (event[pascalName] !== undefined && event[pascalName] !== null) {
+                        return event[pascalName];
+                    }
 
-                        apiPost: function (path, body) {
-                            return fetch(this.serverUrl + '/' + path, {
-                                method: 'POST',
-                                headers: {
-                                    'Authorization': 'MediaBrowser Token="' + this.token + '"',
-                                    'Content-Type': 'application/json'
-                                },
-                                body: JSON.stringify(body)
-                            });
-                        },
+                    return event[camelName];
+                },
 
-                        init: function () {
-                            var self = this;
-                            console.log('[LetterboxdSync] Stats page initializing...');
+                normalizeStatus: function (status) {
+                    if (typeof status === 'string') {
+                        return status;
+                    }
 
-                            self.apiFetch('Jellyfin.Plugin.LetterboxdSync/Stats')
-                                .then(function (r) { return r.json(); })
-                                .then(function (stats) {
-                                    console.log('[LetterboxdSync] Stats loaded:', stats);
-                                    document.getElementById('statTotal').textContent = stats.total;
-                                    document.getElementById('statSuccess').textContent = stats.success;
-                                    document.getElementById('statRewatches').textContent = stats.rewatches;
-                                    document.getElementById('statSkipped').textContent = stats.skipped;
-                                    document.getElementById('statFailed').textContent = stats.failed;
-                                })
-                                .catch(function (err) {
-                                    console.error('[LetterboxdSync] Stats error:', err);
-                                });
+                    return ['Success', 'Skipped', 'Failed', 'Rewatch'][status] || 'Unknown';
+                },
 
-                            self.apiFetch('Jellyfin.Plugin.LetterboxdSync/History?count=100')
-                                .then(function (r) { return r.json(); })
-                                .then(function (events) {
-                                    var tbody = document.getElementById('historyBody');
-                                    if (events.length === 0) {
-                                        tbody.innerHTML = '<tr><td colspan="5" style="padding:1em;color:#666;">No sync history yet. Run a sync to see activity here.</td></tr>';
-                                        return;
-                                    }
+                getStatusMeta: function (statusName) {
+                    var statusMap = {
+                        Success: { color: 'var(--lb-green)', label: 'Synced' },
+                        Skipped: { color: 'var(--lb-text)', label: 'Skipped' },
+                        Failed: { color: 'var(--lb-red)', label: 'Failed' },
+                        Rewatch: { color: 'var(--lb-purple)', label: 'Rewatch' }
+                    };
 
-                                    tbody.innerHTML = '';
-                                    events.forEach(function (e) {
-                                        var tr = document.createElement('tr');
-                                        tr.style.borderBottom = '1px solid #333';
+                    return statusMap[statusName] || { color: 'var(--lb-text)', label: statusName };
+                },
 
-                                        var statusColor = e.Status === 0 ? '#00e054' : e.Status === 1 ? '#999' : e.Status === 2 ? '#e74c3c' : '#40bcf4';
-                                        var statusText = e.Status === 0 ? 'Synced' : e.Status === 1 ? 'Skipped' : e.Status === 2 ? 'Failed' : 'Rewatch';
+                init: function () {
+                    var self = this;
+                    if (!self.resolveAuth()) {
+                        document.querySelector('.lb-main').innerHTML = '<div style="text-align:center; padding:5em; color:var(--lb-red);">Authentication failed. Please open this page from Jellyfin.</div>';
+                        return;
+                    }
 
-                                        var filmLink = e.FilmSlug
-                                            ? '<a href="https://letterboxd.com/film/' + e.FilmSlug + '/" target="_blank" style="color:#00e054;">' + e.FilmTitle + '</a>'
-                                            : e.FilmTitle;
+                    // Setup navigation links
+                    var suffix = '?server=' + encodeURIComponent(self.serverUrl) + '&token=' + encodeURIComponent(self.token);
+                    document.getElementById('homeLink').href = self.serverUrl + '/web/index.html';
+                    document.getElementById('settingsLink').href = ApiClient.getUrl('Jellyfin.Plugin.LetterboxdSync/UserSettingsPage') + suffix;
 
-                                        var ts = new Date(e.Timestamp);
-                                        var timeStr = ts.toLocaleDateString() + ' ' + ts.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    console.log('[LetterboxdSync] Stats page initializing...');
+                    self.refresh();
 
-                                        var reviewBtn = '';
-                                        if (e.FilmSlug && (e.Status === 0 || e.Status === 3)) {
-                                            reviewBtn = '<button type="button" onclick="LBStats.openReview(\'' + e.FilmSlug + '\', \'' + e.FilmTitle.replace(/'/g, "\\'") + '\')" style="background:#2c3440;color:#fff;border:1px solid #444;border-radius:4px;padding:0.2em 0.6em;cursor:pointer;font-size:0.85em;">Write</button>';
-                                        }
+                    document.getElementById('reviewCancel').addEventListener('click', function () {
+                        document.getElementById('reviewModal').style.display = 'none';
+                    });
 
-                                        var errorInfo = e.Status === 2 && e.Error ? ' title="' + e.Error.replace(/"/g, '&quot;') + '"' : '';
+                    document.getElementById('reviewSubmit').addEventListener('click', function () {
+                        self.submitReview();
+                    });
 
-                                        tr.innerHTML = '<td style="padding:0.5em;">' + filmLink + '</td>'
-                                            + '<td style="padding:0.5em;color:' + statusColor + ';"' + errorInfo + '>' + statusText + '</td>'
-                                            + '<td style="padding:0.5em;color:#9ab;">' + (e.Source || '-') + '</td>'
-                                            + '<td style="padding:0.5em;color:#9ab;">' + timeStr + '</td>'
-                                            + '<td style="padding:0.5em;">' + reviewBtn + '</td>';
+                    document.getElementById('runSyncBtn').addEventListener('click', function () {
+                        self.runSync();
+                    });
+                },
 
-                                        tbody.appendChild(tr);
-                                    });
-                                });
+                refresh: function () {
+                    var self = this;
+                    self.apiFetch('Jellyfin.Plugin.LetterboxdSync/Stats')
+                        .then(function (r) { return r.json(); })
+                        .then(function (stats) {
+                            document.getElementById('statTotal').textContent = stats.total;
+                            document.getElementById('statSuccess').textContent = stats.success;
+                            document.getElementById('statRewatches').textContent = stats.rewatches;
+                            document.getElementById('statSkipped').textContent = stats.skipped;
+                            document.getElementById('statFailed').textContent = stats.failed;
+                        });
 
-                            document.getElementById('reviewCancel').addEventListener('click', function () {
-                                document.getElementById('reviewModal').style.display = 'none';
-                            });
-
-                            document.getElementById('reviewSubmit').addEventListener('click', function () {
-                                self.submitReview();
-                            });
-
-                            document.getElementById('runSyncBtn').addEventListener('click', function () {
-                                self.runSync();
-                            });
-                        },
-
-                        refresh: function () {
-                            var self = this;
-                            self.apiFetch('Jellyfin.Plugin.LetterboxdSync/Stats')
-                                .then(function (r) { return r.json(); })
-                                .then(function (stats) {
-                                    document.getElementById('statTotal').textContent = stats.total;
-                                    document.getElementById('statSuccess').textContent = stats.success;
-                                    document.getElementById('statRewatches').textContent = stats.rewatches;
-                                    document.getElementById('statSkipped').textContent = stats.skipped;
-                                    document.getElementById('statFailed').textContent = stats.failed;
-                                });
-
-                            self.apiFetch('Jellyfin.Plugin.LetterboxdSync/History?count=100')
-                                .then(function (r) { return r.json(); })
-                                .then(function (events) {
-                                    var tbody = document.getElementById('historyBody');
-                                    tbody.innerHTML = '';
-                                    if (events.length === 0) {
-                                        tbody.innerHTML = '<tr><td colspan="5" style="padding:1em;color:#666;">No activity yet.</td></tr>';
-                                        return;
-                                    }
-                                    events.forEach(function (e) {
-                                        var tr = document.createElement('tr');
-                                        tr.style.borderBottom = '1px solid #333';
-                                        var statusColor = e.Status === 0 ? '#00e054' : e.Status === 1 ? '#999' : e.Status === 2 ? '#e74c3c' : '#40bcf4';
-                                        var statusText = e.Status === 0 ? 'Synced' : e.Status === 1 ? 'Skipped' : e.Status === 2 ? 'Failed' : 'Rewatch';
-                                        var filmLink = e.FilmSlug ? '<a href="https://letterboxd.com/film/' + e.FilmSlug + '/" target="_blank" style="color:#00e054;">' + e.FilmTitle + '</a>' : e.FilmTitle;
-                                        var ts = new Date(e.Timestamp);
-                                        var timeStr = ts.toLocaleDateString() + ' ' + ts.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                                        var reviewBtn = '';
-                                        if (e.FilmSlug && (e.Status === 0 || e.Status === 3)) {
-                                            reviewBtn = '<button type="button" onclick="LBStats.openReview(\'' + e.FilmSlug + '\', \'' + e.FilmTitle.replace(/'/g, "\\'") + '\')" style="background:#2c3440;color:#fff;border:1px solid #444;border-radius:4px;padding:0.2em 0.6em;cursor:pointer;font-size:0.85em;">Review</button>';
-                                        }
-                                        var errorInfo = e.Status === 2 && e.Error ? ' title="' + e.Error.replace(/"/g, '&quot;') + '"' : '';
-                                        tr.innerHTML = '<td style="padding:0.5em;">' + filmLink + '</td>'
-                                            + '<td style="padding:0.5em;color:' + statusColor + ';"' + errorInfo + '>' + statusText + '</td>'
-                                            + '<td style="padding:0.5em;color:#9ab;">' + (e.Source || '-') + '</td>'
-                                            + '<td style="padding:0.5em;color:#9ab;">' + timeStr + '</td>'
-                                            + '<td style="padding:0.5em;">' + reviewBtn + '</td>';
-                                        tbody.appendChild(tr);
-                                    });
-                                });
-                        },
-
-                        runSync: function () {
-                            var self = this;
-                            var btn = document.getElementById('runSyncBtn');
-                            var status = document.getElementById('syncStatus');
-                            btn.disabled = true;
-                            status.textContent = 'Finding sync task...';
-
-                            // Get the task ID for our sync task
-                            self.apiFetch('ScheduledTasks')
-                                .then(function (r) { return r.json(); })
-                                .then(function (tasks) {
-                                    var task = tasks.find(function (t) { return t.Key === 'LetterboxdSync'; });
-                                    if (!task) {
-                                        status.innerHTML = '<span style="color:#e74c3c;">Sync task not found</span>';
-                                        btn.disabled = false;
-                                        return;
-                                    }
-
-                                    status.textContent = 'Running sync...';
-
-                                    // Trigger the task
-                                    fetch(self.serverUrl + '/ScheduledTasks/Running/' + task.Id, {
-                                        method: 'POST',
-                                        headers: { 'Authorization': 'MediaBrowser Token="' + self.token + '"' }
-                                    })
-                                        .then(function () {
-                                            status.innerHTML = '<span style="color:#00e054;">Sync started!</span> Refreshing in 30s...';
-                                            // Poll for completion
-                                            var pollCount = 0;
-                                            var poll = setInterval(function () {
-                                                pollCount++;
-                                                self.apiFetch('ScheduledTasks/' + task.Id)
-                                                    .then(function (r) { return r.json(); })
-                                                    .then(function (t) {
-                                                        if (t.State === 'Idle') {
-                                                            clearInterval(poll);
-                                                            status.innerHTML = '<span style="color:#00e054;">Sync complete!</span>';
-                                                            btn.disabled = false;
-                                                            self.refresh();
-                                                        } else {
-                                                            status.textContent = 'Syncing... (' + pollCount * 5 + 's)';
-                                                        }
-                                                    });
-                                            }, 5000);
-
-                                            // Safety timeout at 10 min
-                                            setTimeout(function () {
-                                                clearInterval(poll);
-                                                btn.disabled = false;
-                                                status.textContent = 'Sync may still be running. Refresh to check.';
-                                                self.refresh();
-                                            }, 600000);
-                                        });
-                                });
-                        },
-
-                        openReview: function (slug, title) {
-                            this.currentSlug = slug;
-                            document.getElementById('reviewTitle').textContent = 'Review: ' + title;
-                            document.getElementById('reviewText').value = '';
-                            document.getElementById('reviewSpoilers').checked = false;
-                            document.getElementById('reviewStatus').textContent = '';
-                            document.getElementById('reviewModal').style.display = 'flex';
-                        },
-
-                        submitReview: function () {
-                            var self = this;
-                            var text = document.getElementById('reviewText').value.trim();
-                            if (!text) {
-                                document.getElementById('reviewStatus').textContent = 'Please write something.';
+                    self.apiFetch('Jellyfin.Plugin.LetterboxdSync/History?count=100')
+                        .then(function (r) { return r.json(); })
+                        .then(function (events) {
+                            var tbody = document.getElementById('historyBody');
+                            if (events.length === 0) {
+                                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:3em; color:var(--lb-text);">No activity found.</td></tr>';
                                 return;
                             }
 
-                            document.getElementById('reviewStatus').textContent = 'Posting...';
-                            document.getElementById('reviewSubmit').disabled = true;
+                            tbody.innerHTML = '';
+                            events.forEach(function (e) {
+                                var tr = document.createElement('tr');
+                                var status = self.getEventValue(e, 'Status', 'status');
+                                var statusName = self.normalizeStatus(status);
+                                var statusMeta = self.getStatusMeta(statusName);
+                                var filmSlug = self.getEventValue(e, 'FilmSlug', 'filmSlug') || '';
+                                var filmTitle = self.getEventValue(e, 'FilmTitle', 'filmTitle') || 'Unknown film';
+                                var tmdbId = self.getEventValue(e, 'TmdbId', 'tmdbId') || 0;
+                                var error = self.getEventValue(e, 'Error', 'error') || '';
+                                var source = self.getEventValue(e, 'Source', 'source') || '-';
+                                var timestamp = self.getEventValue(e, 'Timestamp', 'timestamp');
 
-                            self.apiPost('Jellyfin.Plugin.LetterboxdSync/Review', {
-                                filmSlug: self.currentSlug,
-                                reviewText: text,
-                                containsSpoilers: document.getElementById('reviewSpoilers').checked
-                            })
-                                .then(function (r) { return r.json(); })
-                                .then(function (data) {
-                                    document.getElementById('reviewSubmit').disabled = false;
-                                    if (data.success) {
-                                        document.getElementById('reviewStatus').innerHTML = '<span style="color:#00e054;">Review posted!</span>';
-                                        setTimeout(function () {
-                                            document.getElementById('reviewModal').style.display = 'none';
-                                        }, 1500);
-                                    } else {
-                                        document.getElementById('reviewStatus').innerHTML = '<span style="color:#e74c3c;">' + (data.error || 'Failed') + '</span>';
-                                    }
-                                })
-                                .catch(function (err) {
-                                    document.getElementById('reviewSubmit').disabled = false;
-                                    document.getElementById('reviewStatus').innerHTML = '<span style="color:#e74c3c;">Error: ' + err.message + '</span>';
-                                });
-                        }
-                    };
+                                var filmCell = filmSlug
+                                    ? '<a href="https://letterboxd.com/film/' + filmSlug + '/" target="_blank" style="color:' + statusMeta.color + '; text-decoration:none; font-weight:bold; border-bottom:1px solid rgba(255,255,255,0.1);">' + filmTitle + '</a>'
+                                    : '<span style="color:' + statusMeta.color + '; font-weight:bold;">' + filmTitle + '</span>';
 
-                    if (LBStats.resolveAuth()) {
-                        console.log('[LetterboxdSync] Auth resolved, server:', LBStats.serverUrl);
-                        LBStats.init();
-                    } else {
-                        console.error('[LetterboxdSync] Could not resolve auth from ApiClient or localStorage');
+                                var eventDate = timestamp ? new Date(timestamp) : null;
+                                var dateStr = eventDate && !isNaN(eventDate.getTime())
+                                    ? eventDate.toLocaleDateString() + ' ' + eventDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                                    : '-';
+
+                                var actionButton = '';
+                                if (filmSlug && (statusName === 'Success' || statusName === 'Rewatch' || statusName === 'Skipped')) {
+                                    actionButton = '<button class="lb-btn review-btn lb-btn-outline" style="padding:0.3em 0.8em; font-size:0.8em;" onclick="LBStats.openReview(\'' + filmSlug + '\', \'' + filmTitle.replace(/'/g, "\\'") + '\')">Review</button>';
+                                }
+
+                                if (statusName === 'Failed' && tmdbId > 0) {
+                                    actionButton = '<button class="lb-btn lb-btn-outline" style="padding:0.3em 0.8em; font-size:0.8em;" onclick="LBStats.retrySync(' + tmdbId + ', this)">Retry</button>';
+                                }
+
+                                var errorTitle = statusName === 'Failed' && error ? ' title="' + error.replace(/"/g, '&quot;') + '"' : '';
+                                var errorIcon = errorTitle ? ' <span style="cursor:help;opacity:0.7;"' + errorTitle + '>&#9432;</span>' : '';
+
+                                tr.innerHTML = '<td>' + filmCell + '</td>' +
+                                    '<td style="color:' + statusMeta.color + ';">' + statusMeta.label + errorIcon + '</td>' +
+                                    '<td style="color:var(--lb-text); font-size:0.85em;">' + source + '</td>' +
+                                    '<td style="color:var(--lb-text); font-size:0.85em;">' + dateStr + '</td>' +
+                                    '<td>' + actionButton + '</td>';
+                                tbody.appendChild(tr);
+                            });
+                        });
+                },
+
+                runSync: function () {
+                    var self = this;
+                    var btn = document.getElementById('runSyncBtn');
+                    var status = document.getElementById('syncStatus');
+                    btn.disabled = true;
+                    status.textContent = 'Running...';
+
+                    self.apiPost('Jellyfin.Plugin.LetterboxdSync/RunSync', {})
+                        .then(function (r) { return r.json().then(function (data) { return { ok: r.ok, data: data }; }); })
+                        .then(function (result) {
+                            btn.disabled = false;
+                            if (!result.ok) {
+                                status.innerHTML = '<span style="color:var(--lb-red);">' + (result.data.error || 'Sync failed') + '</span>';
+                                return;
+                            }
+
+                            status.textContent = 'Finished: ' + result.data.synced + ' synced, ' + result.data.skipped + ' skipped, ' + result.data.failed + ' failed';
+                            self.refresh();
+                        })
+                        .catch(function (err) {
+                            btn.disabled = false;
+                            status.innerHTML = '<span style="color:var(--lb-red);">' + (err.message || 'Sync failed') + '</span>';
+                        });
+                },
+
+                openReview: function (slug, title) {
+                    this.currentSlug = slug;
+                    document.getElementById('reviewTitle').textContent = 'Review: ' + title;
+                    document.getElementById('reviewText').value = '';
+                    document.getElementById('reviewSpoilers').checked = false;
+                    document.getElementById('reviewStatus').textContent = '';
+                    document.getElementById('reviewModal').style.display = 'flex';
+                },
+
+                retrySync: function (tmdbId, btn) {
+                    var self = this;
+                    btn.disabled = true;
+                    btn.textContent = 'Retrying...';
+
+                    self.apiPost('Jellyfin.Plugin.LetterboxdSync/Retry', { tmdbId: tmdbId })
+                        .then(function (r) { return r.json().then(function (data) { return { ok: r.ok, data: data }; }); })
+                        .then(function (result) {
+                            if (!result.ok || !result.data.success) {
+                                btn.disabled = false;
+                                btn.textContent = 'Retry';
+                                alert(result.data.error || 'Retry failed');
+                                return;
+                            }
+
+                            self.refresh();
+                        })
+                        .catch(function (err) {
+                            btn.disabled = false;
+                            btn.textContent = 'Retry';
+                            alert(err.message || 'Retry failed');
+                        });
+                },
+
+                submitReview: function () {
+                    var self = this;
+                    var text = document.getElementById('reviewText').value.trim();
+                    if (!text) {
+                        document.getElementById('reviewStatus').textContent = 'Please enter a review.';
+                        return;
                     }
-                </script>
-            </div>
-        </div>
+
+                    document.getElementById('reviewStatus').textContent = 'Posting...';
+                    document.getElementById('reviewSubmit').disabled = true;
+
+                    self.apiPost('Jellyfin.Plugin.LetterboxdSync/Review', {
+                        filmSlug: self.currentSlug,
+                        reviewText: text,
+                        containsSpoilers: document.getElementById('reviewSpoilers').checked
+                    }).then(function (r) { return r.json(); })
+                        .then(function (data) {
+                            document.getElementById('reviewSubmit').disabled = false;
+                            if (data.success) {
+                                document.getElementById('reviewStatus').innerHTML = '<span style="color:var(--lb-green);">Success!</span>';
+                                setTimeout(function () { document.getElementById('reviewModal').style.display = 'none'; }, 1500);
+                            } else {
+                                document.getElementById('reviewStatus').innerHTML = '<span style="color:var(--lb-red);">' + (data.error || 'Error') + '</span>';
+                            }
+                        });
+                }
+            };
+
+            LBStats.init();
+        </script>
     </div>
 </body>
 
