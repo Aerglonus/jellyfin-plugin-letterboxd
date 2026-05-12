@@ -137,15 +137,31 @@ jobs:
                  else . end)
                else
                  [{version: $ver, changelog: $cl, targetAbi: $abi, sourceUrl: $url, checksum: $cs, timestamp: $ts}] + .
-               end
-             )' \
+             end
+           )' \
             manifest.json > manifest.tmp && mv manifest.tmp manifest.json
+
+      - name: Preserve release metadata
+        run: |
+          cp manifest.json /tmp/manifest.release.json
+          if [ -f CHANGELOG.md ]; then
+            cp CHANGELOG.md /tmp/CHANGELOG.release.md
+          fi
 
       - name: Commit manifest update
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git fetch origin refs/heads/main:refs/remotes/origin/main
+          git switch -C main refs/remotes/origin/main
+
+          cp /tmp/manifest.release.json manifest.json
+          if [ -f /tmp/CHANGELOG.release.md ]; then
+            cp /tmp/CHANGELOG.release.md CHANGELOG.md
+          fi
+
           git add manifest.json CHANGELOG.md
           git diff --cached --quiet && exit 0
           git commit -m "Update release metadata for ${{ env.REF_NAME }}"
-          git push origin HEAD:main
+          git push origin HEAD:refs/heads/main
