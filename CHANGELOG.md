@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v1.5.0.0 - 2026-05-12
+
 Changes since `f381716` (`update(workflow): Versioning issue`).
 
 ### Added
@@ -40,3 +42,4 @@ Changes since `f381716` (`update(workflow): Versioning issue`).
 
 - Embedded `Web/letterboxd-menu.js` in the plugin project file.
 - Ignored generated `LetterboxdSync/Web/mock_*.html` files.
+
