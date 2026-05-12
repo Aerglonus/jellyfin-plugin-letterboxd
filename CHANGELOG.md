@@ -37,6 +37,7 @@ Changes since `f381716` (`update(workflow): Versioning issue`).
 - Fixed review and retry flows to resolve the current account consistently and require an enabled Letterboxd account.
 - Fixed manual retry favorite syncing to use the shared favorite sync helper instead of duplicating like-sync behavior.
 - Fixed failed retry history lookup so the displayed title is resolved from the current user's history.
+- Bump project version to 1.5.0.0
 
 ### Maintenance
 
