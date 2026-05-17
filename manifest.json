@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/Aerglonus/jellyfin-plugin-letterboxd/main/docs/images/icon.png",
     "versions": [
       {
+        "version": "1.5.1.0",
+        "changelog": "### Fixed\n- Sidebar and settings menus not being loaded in read-only filesystem installs.\n### Breaking Changes\n- Plugin requires the File Transformation plugin to function in read-only filesystem installs.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/Aerglonus/jellyfin-plugin-letterboxd/releases/download/v1.5.1.0/jellyfin-plugin-letterboxd-v1.5.1.0.zip",
+        "checksum": "1d733b4f1cbeb5ebbfbe7966c06d6f4f",
+        "timestamp": "2026-05-17T05:16:05Z"
+      },
+      {
         "version": "1.5.0.0",
         "changelog": "See the changelog for details.",
         "targetAbi": "10.11.0.0",

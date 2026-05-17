@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v1.5.1.0 - 2026-05-17
+
 ### Fixed
 - Sidebar and settings menus not being loaded in read-only filesystem installs.
 
