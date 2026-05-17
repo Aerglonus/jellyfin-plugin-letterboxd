@@ -35,7 +35,8 @@ Uses the authenticated Letterboxd Android REST API (`/api/v0`).
 
 ## Install
 
-> [!NOTE] Read-only Filesystem installs (e.g. Debian/Ubuntu)
+> [!NOTE]
+> ### Read-only Filesystem installs (e.g. Debian/Ubuntu)
 > In read-only installs like bare-metal Debian/Ubuntu the [File Transformation plugin](https://github.com/IAmParadox27/jellyfin-plugin-file-transformation) is needed to display the sidebar/preferences menus.
 
 ### Plugin repository (recommended)
