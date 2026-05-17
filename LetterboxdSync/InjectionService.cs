@@ -1,5 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Reflection;
+using System.Runtime.Loader;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using MediaBrowser.Common.Configuration;
@@ -38,6 +43,19 @@ public class InjectionService : IHostedService
 
     private void InjectScript()
     {
+        try
+        {
+            if (TryRegisterFileTransformation())
+            {
+                _logger.LogInformation("[LetterboxdSync] Successfully registered index.html injection via File Transformation plugin.");
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[LetterboxdSync] Failed to register with File Transformation plugin. Falling back to disk modification.");
+        }
+
         try
         {
             var indexPath = Path.Combine(_appPaths.WebPath, "index.html");
@@ -84,5 +102,80 @@ public class InjectionService : IHostedService
         {
             _logger.LogError(ex, "[LetterboxdSync] Error while trying to inject script block into index.html.");
         }
+    }
+
+    private bool TryRegisterFileTransformation()
+    {
+        var fileTransformationAssembly = AssemblyLoadContext.All
+            .SelectMany(x => x.Assemblies)
+            .FirstOrDefault(x => x.FullName?.Contains(".FileTransformation") ?? false);
+
+        if (fileTransformationAssembly == null)
+            return false;
+
+        var pluginInterfaceType = fileTransformationAssembly.GetType("Jellyfin.Plugin.FileTransformation.PluginInterface");
+        if (pluginInterfaceType == null)
+            return false;
+
+        var jObjectType = Type.GetType("Newtonsoft.Json.Linq.JObject, Newtonsoft.Json") 
+            ?? AssemblyLoadContext.All.SelectMany(x => x.Assemblies).FirstOrDefault(x => x.GetName().Name == "Newtonsoft.Json")?.GetType("Newtonsoft.Json.Linq.JObject");
+
+        if (jObjectType == null)
+            return false;
+
+        var parseMethod = jObjectType.GetMethod("Parse", new[] { typeof(string) });
+        if (parseMethod == null)
+            return false;
+
+        var payloadJson = JsonSerializer.Serialize(new
+        {
+            id = Guid.Parse("00f8df7c-b110-4529-8e8c-7675905cfd0f").ToString(), // Re-use plugin ID for transformation ID
+            fileNamePattern = "index\\.html",
+            callbackAssembly = GetType().Assembly.FullName,
+            callbackClass = GetType().FullName,
+            callbackMethod = nameof(TransformIndexHtml)
+        });
+
+        var payloadObj = parseMethod.Invoke(null, new object[] { payloadJson });
+        var registerMethod = pluginInterfaceType.GetMethod("RegisterTransformation");
+        
+        if (registerMethod != null && payloadObj != null)
+        {
+            registerMethod.Invoke(null, new[] { payloadObj });
+            return true;
+        }
+
+        return false;
+    }
+
+    public static string TransformIndexHtml(Dictionary<string, string> payload)
+    {
+        if (payload == null || !payload.TryGetValue("contents", out var content) || string.IsNullOrEmpty(content))
+            return payload != null && payload.ContainsKey("contents") ? payload["contents"] : string.Empty;
+
+        var startComment = "<!-- BEGIN LetterboxdSync Menu Injector -->";
+        var endComment = "<!-- END LetterboxdSync Menu Injector -->";
+        var scriptUrl = "../Jellyfin.Plugin.LetterboxdSync/MenuScript";
+        var injectionBlock = $"{startComment}\n<script src=\"{scriptUrl}\"></script>\n{endComment}";
+
+        if (content.Contains(startComment))
+        {
+            var start = content.IndexOf(startComment, StringComparison.Ordinal);
+            var end = content.IndexOf(endComment, start, StringComparison.Ordinal);
+            if (end >= 0)
+            {
+                end += endComment.Length;
+                content = content.Remove(start, end - start).Insert(start, injectionBlock);
+                return content;
+            }
+        }
+
+        var closingBodyTag = "</body>";
+        if (content.Contains(closingBodyTag))
+        {
+            content = content.Replace(closingBodyTag, $"{injectionBlock}\n{closingBodyTag}");
+        }
+
+        return content;
     }
 }

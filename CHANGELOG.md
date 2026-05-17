@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Fixed
+- Sidebar and settings menus not being loaded in read-only filesystem installs.
+
+### Breaking Changes
+- Plugin requires the File Transformation plugin to function in read-only filesystem installs.
+
 ## v1.5.0.0 - 2026-05-12
 
 Changes since `f381716` (`update(workflow): Versioning issue`).
