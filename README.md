@@ -28,13 +28,15 @@ Uses the authenticated Letterboxd Android REST API (`/api/v0`).
 - **Dashboard** — sync stats, activity history, one-click manual retry for failed syncs, and manual triggering
 - **Automatic APIs Retries** — gracefully handles transient Letterboxd errors and timeouts using cloned requests
 - **Date filtering** — limit catch-up syncs to recently watched films
-- **No Extra plugins** - Does not require extra plugins to inject the menus to the sidebar / menu-preferences.
 
 #### Screenshots
 
 - Interface screenshots can be found [Here](/docs/images/).
 
 ## Install
+
+> [!NOTE] Read-only Filesystem installs (e.g. Debian/Ubuntu)
+> In read-only installs like bare-metal Debian/Ubuntu the [File Transformation plugin](https://github.com/IAmParadox27/jellyfin-plugin-file-transformation) is needed to display the sidebar/preferences menus.
 
 ### Plugin repository (recommended)
 
