@@ -42,7 +42,7 @@ public class SyncTask : IScheduledTask
 
     public async Task ExecuteAsync(IProgress<double> progress, CancellationToken cancellationToken)
     {
-        var users = _userManager.Users.ToList();
+        var users = _userManager.GetUsers().ToList();
         var processedUsers = 0;
 
         foreach (var user in users)

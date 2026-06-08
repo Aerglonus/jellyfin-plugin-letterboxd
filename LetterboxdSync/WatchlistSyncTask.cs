@@ -43,7 +43,7 @@ public class WatchlistSyncTask : IScheduledTask
 
     public async Task ExecuteAsync(IProgress<double> progress, CancellationToken cancellationToken)
     {
-        var users = _userManager.Users.ToList();
+        var users = _userManager.GetUsers().ToList();
 
         foreach (var user in users)
         {
