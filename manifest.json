@@ -10,11 +10,11 @@
     "versions": [
       {
         "version": "1.6.0.0",
-        "changelog": "### Changed\n- Retargeted to .NET 10 and Jellyfin 12.0.\n- Updated IUserManager.Users to GetUsers() method.\n- Updated AddItemToPlaylistAsync to include position parameter.",
+        "changelog": "See the changelog for details.",
         "targetAbi": "12.0.0.0",
         "sourceUrl": "https://github.com/Aerglonus/jellyfin-plugin-letterboxd/releases/download/v1.6.0.0/jellyfin-plugin-letterboxd-v1.6.0.0.zip",
-        "checksum": "",
-        "timestamp": "2026-09-09T00:00:00Z"
+        "checksum": "496cb9753fbd1f860c5de0910f5099da",
+        "timestamp": "2026-09-09T03:07:45Z"
       },
       {
         "version": "1.5.1.0",
