@@ -97,7 +97,7 @@ The **Dashboard** tab shows:
 
 ## Requirements
 
-- Jellyfin 10.11+
+- Jellyfin 12.0+
 - A Letterboxd account
 
 ## Building from source
@@ -139,4 +139,4 @@ You can also pass the properties directly via the command line:
 dotnet build -c Release -p:LetterboxdClientId="YOUR_CLIENT_ID" -p:LetterboxdClientSecret="YOUR_CLIENT_SECRET"
 ```
 
-Final DLL is in `LetterboxdSync/bin/Release/net9.0/`.
+Final DLL is in `LetterboxdSync/bin/Release/net10.0/`.
