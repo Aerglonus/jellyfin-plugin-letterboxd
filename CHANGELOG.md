@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## v1.6.0.0 - 2026-09-09
+
+### Added
+
+### Changed
+- Retargeted to .NET 10 and Jellyfin 12.0.
+- Updated IUserManager.Users to GetUsers() method.
+- Updated AddItemToPlaylistAsync to include position parameter.
+
 ## v1.5.1.0 - 2026-05-17
 
 ### Fixed
