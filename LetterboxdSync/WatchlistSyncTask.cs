@@ -43,7 +43,7 @@ public class WatchlistSyncTask : IScheduledTask
 
     public async Task ExecuteAsync(IProgress<double> progress, CancellationToken cancellationToken)
     {
-        var users = _userManager.Users.ToList();
+        var users = _userManager.GetUsers().ToList();
 
         foreach (var user in users)
         {
@@ -140,7 +140,7 @@ public class WatchlistSyncTask : IScheduledTask
 
                 if (newItems.Length > 0)
                 {
-                    await _playlistManager.AddItemToPlaylistAsync(playlist.Id, newItems, user.Id)
+                    await _playlistManager.AddItemToPlaylistAsync(playlist.Id, newItems, null, user.Id)
                         .ConfigureAwait(false);
 
                     _logger.LogInformation("Added {Count} new films to playlist '{Name}' for {Username}",
