@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/Aerglonus/jellyfin-plugin-letterboxd/main/docs/images/icon.png",
     "versions": [
       {
+        "version": "1.6.1.0",
+        "changelog": "### Fixed\n- Fixed `AssemblyVersion` and `FileVersion` in `LetterboxdSync.csproj` so the compiled plugin DLL reports the correct version (`1.6.1.0`) to Jellyfin instead of `1.5.1.0`.",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/Aerglonus/jellyfin-plugin-letterboxd/releases/download/v1.6.1.0/jellyfin-plugin-letterboxd-v1.6.1.0.zip",
+        "checksum": "b79574e27c1a0499dd205b5da4abc1fe",
+        "timestamp": "2026-11-14T08:53:50Z"
+      },
+      {
         "version": "1.6.0.0",
         "changelog": "### Changed\n- Retargeted to .NET 10 and Jellyfin 12.0.\n- Updated IUserManager.Users to GetUsers() method. Closes https://github.com/Aerglonus/jellyfin-plugin-letterboxd/pull/2 and Fixes https://github.com/Aerglonus/jellyfin-plugin-letterboxd/issues/1\n- Updated AddItemToPlaylistAsync to include position parameter.",
         "targetAbi": "12.0.0.0",

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v1.6.1.0 - 2026-11-14
+
 ### Fixed
 - Fixed `AssemblyVersion` and `FileVersion` in `LetterboxdSync.csproj` so the compiled plugin DLL reports the correct version (`1.6.1.0`) to Jellyfin instead of `1.5.1.0`.
 
